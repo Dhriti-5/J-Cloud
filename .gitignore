@@ -1,0 +1,24 @@
+# Compiled files
+*.class
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/
+
+# Maven / Gradle
+target/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tomcat
+*.war
+*.jar
+
+# Temporary
+tmp/
