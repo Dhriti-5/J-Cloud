@@ -1,3 +1,5 @@
+package shared;
+
 public class Chunk {
 
     private int chunkId;
