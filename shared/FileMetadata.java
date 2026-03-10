@@ -1,5 +1,3 @@
-package shared;
-
 public class FileMetadata {
 
     private int fileId;

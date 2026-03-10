@@ -1,5 +1,3 @@
-package shared;
-
 public class NodeInfo {
 
     private int nodeId;
@@ -18,52 +16,4 @@ public class NodeInfo {
         this.storageCapacity=storageCapacity;
     }
 
-    // Getters and Setters
-    public int getNodeId() {
-        return nodeId;
-    }
-
-    public void setNodeId(int nodeId) {
-        this.nodeId = nodeId;
-    }
-
-    public String getNodeName() {
-        return nodeName;
-    }
-
-    public void setNodeName(String nodeName) {
-        this.nodeName = nodeName;
-    }
-
-    public String getIpAddress() {
-        return ipAddress;
-    }
-
-    public void setIpAddress(String ipAddress) {
-        this.ipAddress = ipAddress;
-    }
-
-    public int getPort() {
-        return port;
-    }
-
-    public void setPort(int port) {
-        this.port = port;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public long getStorageCapacity() {
-        return storageCapacity;
-    }
-
-    public void setStorageCapacity(long storageCapacity) {
-        this.storageCapacity = storageCapacity;
-    }
 }

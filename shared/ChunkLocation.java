@@ -1,5 +1,3 @@
-package shared;
-
 public class ChunkLocation {
 
     private int chunkId;
