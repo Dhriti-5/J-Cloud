@@ -4,6 +4,9 @@ import dao.NodeDAO;
 import shared.User;
 import shared.NodeInfo;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
 /**
  * Test class to verify Phase 1 implementation
  * Tests database connection, UserDAO, and NodeDAO
@@ -33,7 +36,9 @@ public class TestPhase1 {
         System.out.println("Test 2: User Registration");
         System.out.println("----------------------------");
         UserDAO userDAO = new UserDAO();
-        User testUser = new User("testuser123", "password123", "test@jcloud.com");
+        String rawPassword = "password123";
+        String hashedPassword = hashPassword(rawPassword);
+        User testUser = new User("testuser123", hashedPassword, "test@jcloud.com");
         
         if (userDAO.registerUser(testUser)) {
             System.out.println("✓ User registered with ID: " + testUser.getUserId() + "\n");
@@ -44,7 +49,7 @@ public class TestPhase1 {
         // Test 3: User Authentication
         System.out.println("Test 3: User Authentication");
         System.out.println("----------------------------");
-        User authenticatedUser = userDAO.authenticateUser("testuser123", "password123");
+        User authenticatedUser = userDAO.authenticateUser("testuser123", hashedPassword);
         
         if (authenticatedUser != null) {
             System.out.println("✓ Authentication successful!");
@@ -90,5 +95,20 @@ public class TestPhase1 {
         System.out.println("========================================");
         System.out.println("  PHASE 1 TESTS COMPLETED");
         System.out.println("========================================");
+    }
+
+    private static String hashPassword(String password) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] hashBytes = md.digest(password.getBytes());
+
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hashBytes) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Failed to hash password", e);
+        }
     }
 }

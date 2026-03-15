@@ -23,6 +23,10 @@ Thumbs.db
 # Temporary
 tmp/
 
+# Local environment secrets
+.env
+.env.local
+
 
 DIRECTORY_STRUCTURE.md
 PROJECT_SUMMARY.md

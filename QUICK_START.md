@@ -1,358 +1,223 @@
-# 🚀 Quick Start Guide - J-Cloud
+# 🚀 Quick Start Guide - J-Cloud (Neon PostgreSQL)
 
-## Get J-Cloud running in 5 minutes!
+## Get J-Cloud running with Neon + Tomcat
 
 ---
 
 ## Prerequisites Check ✅
 
-Before starting, verify you have:
+Before starting, verify:
 
 ```cmd
-# Check Java
 java -version
-# Should show: java version "1.8.0" or higher
-
-# Check MySQL
-mysql --version
-# Should show: mysql Ver 8.0.x
-
-# Check MySQL is running
-net start MySQL80
-# Or check: services.msc → MySQL service
 ```
+
+Expected: Java 8+.
+
+Also verify these files exist:
+
+- `jcloud\WEB-INF\lib\postgresql-42.7.10.jar`
+- `.env`
 
 ---
 
-## Step 1: Setup Database (1 minute)
+## Step 1: Configure Database URL in `.env`
 
-Your friend already created it, so just verify:
+Project root file `.env` must contain your Neon URL:
 
-```cmd
-mysql -u root -pJcloud@db
+```text
+JCLOUD_DB_URL=postgresql://<user>:<password>@<host>/<database>?sslmode=require&channel_binding=require
 ```
 
-```sql
-USE jcloud;
-SHOW TABLES;
--- Should show: users, files, chunks, nodes, chunk_locations
-
--- Verify nodes exist (if empty, add them):
-SELECT * FROM nodes;
-
--- If empty, run:
-INSERT INTO nodes (node_name, ip_address, port, status, storage_capacity) 
-VALUES 
-  ('DataNode1', 'localhost', 9101, 'ACTIVE', 5000000000),
-  ('DataNode2', 'localhost', 9102, 'ACTIVE', 5000000000);
-
-EXIT;
-```
+Do not use localhost DB settings.
 
 ---
 
-## Step 2: Download MySQL JDBC Driver (if not done)
-
-1. Download from: https://dev.mysql.com/downloads/connector/j/
-2. Extract `mysql-connector-java-8.x.x.jar`
-3. Place it in `C:\Users\Pc\J-Cloud\` directory
-
----
-
-## Step 3: Compile Everything (1 minute)
+## Step 2: Compile Project
 
 ```cmd
 cd C:\Users\Pc\J-Cloud
 compile.bat
 ```
 
-Wait for "COMPILATION SUCCESSFUL!" message.
-
-**Note:** If servlet compilation fails (servlet-api missing), that's okay. We'll compile servlets separately for Tomcat.
+Wait for compilation success.
 
 ---
 
-## Step 4: Test Database Connection (30 seconds)
+## Step 3: Verify DB + Phase 1 quickly
 
 ```cmd
 test-database.bat
 ```
 
-Look for:
-- ✓ Database connection successful
-- ✓ User registered
-- ✓ Authentication successful
-- ✓ Node registered
+Expected outcomes:
+
+- Database connection successful
+- User registration/authentication successful
+- Node registration + fetch successful
+
+This confirms the app is using Neon PostgreSQL correctly.
 
 ---
 
-## Step 5: Start the Cluster (2 minutes)
+## Step 4: Start Day 3 Services (Master + Data Nodes)
 
-### Terminal 1: Master Node
+### Terminal 1
+
 ```cmd
 run-master.bat
 ```
 
-**Wait for:**
-```
-╔════════════════════════════════════════════╗
-║   J-CLOUD MASTER NODE STARTED              ║
-║   Port: 9000                               ║
-╚════════════════════════════════════════════╝
-✓ Heartbeat monitor started
-```
+### Terminal 2
 
-### Terminal 2: Data Node 1
-Open **new terminal**:
 ```cmd
 cd C:\Users\Pc\J-Cloud
 run-datanode1.bat
 ```
 
-**Wait for:**
-```
-✓ Registration successful!
-♥ Starting heartbeat service
-```
+### Terminal 3
 
-### Terminal 3: Data Node 2
-Open **another terminal**:
 ```cmd
 cd C:\Users\Pc\J-Cloud
 run-datanode2.bat
 ```
 
-**Wait for:**
-```
-✓ Registration successful!
-♥ Starting heartbeat service
-```
+Expected Day 3 behavior:
+
+- both data nodes register with master
+- periodic heartbeats are logged
+- nodes are marked ACTIVE in DB
 
 ---
 
-## Step 6: Deploy Web App (2 minutes)
+## Step 5: Redeploy Day 4 Web App to Tomcat
 
-**Note:** You'll need Apache Tomcat installed. If you don't have it, download from https://tomcat.apache.org/download-90.cgi
+Yes, redeploy is recommended after DB layer changes.
 
-### Option A: Quick Deploy (Eclipse/IntelliJ)
+Important: do a clean redeploy so Tomcat cannot reuse old classes from previous deployments.
 
-1. Import project as Dynamic Web Project
-2. Add MySQL JDBC driver to build path
-3. Configure Tomcat server
-4. Right-click → Run on Server
+Set Tomcat path first:
 
-### Option B: Manual Deploy (Tomcat)
-
-**IMPORTANT:** Set TOMCAT_HOME to your actual Tomcat installation path first!
 ```cmd
-# CMD:
-set TOMCAT_HOME=C:\path\to\your\apache-tomcat-9.0.xx
-
-# PowerShell:
-$env:TOMCAT_HOME = "C:\path\to\your\apache-tomcat-9.0.xx"
+set TOMCAT_HOME=C:\path\to\apache-tomcat-9.0.xx
 ```
 
-Then run the deployment commands:
+```powershell
+$env:TOMCAT_HOME = "C:\path\to\apache-tomcat-9.0.xx"
+$env:CATALINA_HOME = $env:TOMCAT_HOME
+
+# Make Neon DB URL available to Tomcat process
+$env:JCLOUD_DB_URL = "postgresql://<user>:<password>@<host>/<database>?sslmode=require&channel_binding=require"
+```
+
+Then run:
 
 ```cmd
-# Create deployment structure
 cd C:\Users\Pc\J-Cloud
-mkdir jcloud\WEB-INF\classes
-mkdir jcloud\WEB-INF\lib
 
-# Copy compiled classes
-xcopy /E /I bin\shared jcloud\WEB-INF\classes\shared
-xcopy /E /I bin\utils jcloud\WEB-INF\classes\utils
-xcopy /E /I bin\dao jcloud\WEB-INF\classes\dao
+if not exist jcloud\WEB-INF\classes mkdir jcloud\WEB-INF\classes
+if not exist jcloud\WEB-INF\lib mkdir jcloud\WEB-INF\lib
 
-# Compile servlets (servlet-api.jar is in project directory)
-# CMD:
-javac -d jcloud\WEB-INF\classes -cp "bin;servlet-api.jar;mysql-connector-java-9.5.0.jar" webapp\servlet\*.java
+xcopy /E /I /Y bin\shared jcloud\WEB-INF\classes\shared
+xcopy /E /I /Y bin\utils jcloud\WEB-INF\classes\utils
+xcopy /E /I /Y bin\dao jcloud\WEB-INF\classes\dao
 
-# PowerShell:
-javac -d jcloud\WEB-INF\classes -cp "bin;servlet-api.jar;mysql-connector-java-9.5.0.jar" webapp\servlet\*.java
+javac -d jcloud\WEB-INF\classes -cp "bin;servlet-api.jar;jcloud\WEB-INF\lib\postgresql-42.7.10.jar" webapp\servlet\*.java
 
-# Copy resources
-copy webapp\*.jsp jcloud\
-copy webapp\WEB-INF\web.xml jcloud\WEB-INF\
-copy mysql-connector-j-9.5.0.jar jcloud\WEB-INF\lib\
+copy /Y webapp\*.jsp jcloud\
+copy /Y webapp\WEB-INF\web.xml jcloud\WEB-INF\
+copy /Y jcloud\WEB-INF\lib\postgresql-42.7.10.jar jcloud\WEB-INF\lib\
 
-# Deploy to Tomcat (update path to your actual Tomcat location)
-# CMD:
-xcopy /E /I jcloud %TOMCAT_HOME%\webapps\jcloud
+xcopy /E /I /Y jcloud %TOMCAT_HOME%\webapps\jcloud
+```
+
+PowerShell equivalent:
+
+```powershell
+Set-Location C:\Users\Pc\J-Cloud
+
+# Clean old deployment and Tomcat cache first (prevents stale classes)
+if (Test-Path "$env:TOMCAT_HOME\webapps\jcloud") { Remove-Item -Recurse -Force "$env:TOMCAT_HOME\webapps\jcloud" }
+if (Test-Path "$env:TOMCAT_HOME\work\Catalina\localhost\jcloud") { Remove-Item -Recurse -Force "$env:TOMCAT_HOME\work\Catalina\localhost\jcloud" }
+
+if (-not (Test-Path .\jcloud\WEB-INF\classes)) { New-Item -ItemType Directory -Path .\jcloud\WEB-INF\classes | Out-Null }
+if (-not (Test-Path .\jcloud\WEB-INF\lib)) { New-Item -ItemType Directory -Path .\jcloud\WEB-INF\lib | Out-Null }
+
+xcopy /E /I /Y bin\shared jcloud\WEB-INF\classes\shared
+xcopy /E /I /Y bin\utils jcloud\WEB-INF\classes\utils
+xcopy /E /I /Y bin\dao jcloud\WEB-INF\classes\dao
+
+$src = Get-ChildItem .\webapp\servlet\*.java | ForEach-Object FullName
+javac -d jcloud\WEB-INF\classes -cp "bin;servlet-api.jar;jcloud\WEB-INF\lib\postgresql-42.7.10.jar" $src
+
+Copy-Item .\webapp\*.jsp .\jcloud\ -Force
+Copy-Item .\webapp\WEB-INF\web.xml .\jcloud\WEB-INF\ -Force
+
+Copy-Item -Recurse -Force .\jcloud "$env:TOMCAT_HOME\webapps\jcloud"
+```
+
+Restart Tomcat:
+
+```cmd
+%TOMCAT_HOME%\bin\shutdown.bat
 %TOMCAT_HOME%\bin\startup.bat
+```
 
-# PowerShell:
-Copy-Item -Recurse -Force jcloud "$env:TOMCAT_HOME\webapps\jcloud"
+```powershell
+& "$env:TOMCAT_HOME\bin\shutdown.bat"
 & "$env:TOMCAT_HOME\bin\startup.bat"
 ```
-Copy-Item -Recurse -Force jcloud "$env:TOMCAT_HOME\webapps\jcloud"
-& "$env:TOMCAT_HOME\bin\startup.bat"
+
+If startup still shows old MySQL stack traces, stop Tomcat again and delete these folders manually, then start Tomcat:
+
+- $env:TOMCAT_HOME\webapps\jcloud
+- $env:TOMCAT_HOME\work\Catalina\localhost\jcloud
 
 ---
 
-## Step 7: Access the System! 🎉
+## Step 6: Validate Day 4 Web Flow
 
-Open your browser:
+Open:
 
-### Web Interface
-```
+```text
 http://localhost:8080/jcloud
 ```
 
-You should see the login page!
+Validate:
 
-### Test Registration
-1. Click "Register here"
-2. Fill in:
-   - Username: `admin`
-   - Email: `admin@jcloud.com`
-   - Password: `admin123`
-   - Confirm: `admin123`
-3. Click "Register"
-
-### Test Login
-1. Enter username: `admin`
-2. Enter password: `admin123`
-3. Click "Login"
-
-### View Dashboard
-You should see:
-- Welcome message
-- Statistics (0 files, 0 GB, 2 nodes)
-- Quick action buttons
+- register user
+- login user
+- dashboard opens
+- nodes shown as active
 
 ---
 
-## ✅ System Health Check
+## Troubleshooting
 
-### All Green? Check these:
+### Problem: DB connection still goes to localhost
 
-**Terminal 1 (Master):**
-```
-♥ Heartbeat from: DataNode1
-♥ Heartbeat from: DataNode2
-✓ Node ALIVE: DataNode1
-✓ Node ALIVE: DataNode2
-```
+Cause: `.env` missing or wrong `JCLOUD_DB_URL`.
 
-**Terminal 2 (DataNode1):**
-```
-♥ Heartbeat sent and acknowledged
-♥ Heartbeat sent and acknowledged
-```
+Fix: update `.env` and rerun `test-database.bat`.
 
-**Terminal 3 (DataNode2):**
-```
-♥ Heartbeat sent and acknowledged
-♥ Heartbeat sent and acknowledged
-```
+### Problem: PostgreSQL driver not found
 
-**Database Check:**
-```cmd
-mysql -u root -pJcloud@db jcloud -e "SELECT * FROM nodes;"
-```
+Ensure this jar exists:
 
-Should show both nodes as ACTIVE.
+- `jcloud\WEB-INF\lib\postgresql-42.7.10.jar`
 
-**Web Check:**
-- Can access login page ✅
-- Can register user ✅
-- Can login ✅
-- Can see dashboard ✅
+### Problem: Tomcat app opens but login/register fails
+
+Redeploy again and confirm updated classes are copied from `bin\utils` and `bin\dao`.
 
 ---
 
-## 🧪 Fun Tests to Try
+## Day 3 + Day 4 Success Checklist
 
-### Test 1: Kill a Node (Death Detection)
-1. In DataNode1 terminal, press `Ctrl+C`
-2. Wait 15 seconds
-3. Watch Master terminal - should show: `☠ Node DEAD: DataNode1`
-4. Check database: `SELECT * FROM nodes;` - DataNode1 = DEAD
+- Master running on `9000`
+- DataNode1 and DataNode2 sending heartbeats
+- `test-database.bat` completes successfully
+- Tomcat serves `http://localhost:8080/jcloud`
+- Register/Login works on web UI
 
-### Test 2: Revive a Node
-1. Restart DataNode1: `run-datanode1.bat`
-2. Watch it re-register
-3. Status changes back to ACTIVE
-
-### Test 3: Multiple Users
-1. Logout from dashboard
-2. Register another user
-3. Login with new credentials
-4. Check `users` table: `SELECT * FROM users;`
-
----
-
-## 🚨 Troubleshooting
-
-### Problem: "Connection refused" when starting nodes
-**Solution:** Start Master Node first, wait for "STARTED", then start Data Nodes
-
-### Problem: "Cannot connect to database"
-**Solution:** 
-```cmd
-net start MySQL80
-mysql -u root -pJcloud@db
-```
-
-### Problem: Tomcat 404 error
-**Solution:** Check deployment path is `webapps/jcloud/` not `webapps/jcloud.war/`
-
-### Problem: Heartbeat not showing
-**Solution:** Check firewall, ensure localhost connections allowed
-
-### Problem: Login fails
-**Solution:** Check if user was created: `SELECT * FROM users;`
-
----
-
-## 📂 File Locations Quick Reference
-
-```
-C:\Users\Pc\J-Cloud\
-├── compile.bat              ← Run first
-├── test-database.bat        ← Run second
-├── run-master.bat           ← Run third
-├── run-datanode1.bat        ← Run fourth
-├── run-datanode2.bat        ← Run fifth
-└── mysql-connector-*.jar    ← Must be here!
-```
-
----
-
-## 🎯 What's Running?
-
-After successful start:
-
-| Component | Port | Status Check |
-|-----------|------|--------------|
-| MySQL | 3306 | `mysql -u root -pJcloud@db` |
-| Master Node | 9000 | Terminal shows heartbeat monitor |
-| Data Node 1 | 9101 | Terminal shows heartbeat acknowledged |
-| Data Node 2 | 9102 | Terminal shows heartbeat acknowledged |
-| Tomcat | 8080 | `http://localhost:8080/jcloud` |
-
----
-
-## 🎉 Success!
-
-If you see:
-- ✅ Master Node running with heartbeat monitor
-- ✅ Both Data Nodes sending heartbeats
-- ✅ Web interface accessible
-- ✅ Can login and see dashboard
-
-**Congratulations! Your distributed file storage system is LIVE! 🚀**
-
----
-
-## 📚 Next Steps
-
-1. Read [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for detailed documentation
-2. Check [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) for implementation details
-3. Review [DIRECTORY_STRUCTURE.md](DIRECTORY_STRUCTURE.md) for file organization
-
----
-
-**Need help? Check the console output in each terminal for error messages.**
+If all are true, Day 3 and Day 4 are working as intended with Neon PostgreSQL.
