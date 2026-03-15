@@ -1,26 +1,26 @@
-# J-Cloud - Setup & Deployment Guide
+﻿# J-Cloud - Setup & Deployment Guide
 
-## 🎯 What We Built - All 4 Phases Complete!
+## ðŸŽ¯ What We Built - All 4 Phases Complete!
 
-### ✅ Phase 1: Database & Shared Layer
-- **DBConnection.java** - Thread-safe Singleton for MySQL connections
+### âœ… Phase 1: Database & Shared Layer
+- **DBConnection.java** - Thread-safe Singleton for PostgreSQL connections
 - **UserDAO.java** - User registration and authentication
 - **NodeDAO.java** - Node registration and status management
 - **Shared POJOs** - User, NodeInfo, Chunk, ChunkLocation, FileMetadata (with getters/setters)
 
-### ✅ Phase 2: Scalable Master Node
+### âœ… Phase 2: Scalable Master Node
 - **MasterServer.java** - Main server with 50-thread pool
 - **ClientHandler.java** - Protocol parser (REGISTER_NODE, HEARTBEAT, PING)
 - **HeartbeatMonitor.java** - Scheduled death detector (15s timeout)
 - ConcurrentHashMap for thread-safe node tracking
 
-### ✅ Phase 3: Data Node Development
+### âœ… Phase 3: Data Node Development
 - **DataNodeServer.java** - Auto-registration with Master
 - **DataNode2Launcher.java** - Quick launcher for second node
 - Scheduled heartbeat every 5 seconds
 - Graceful shutdown hooks
 
-### ✅ Phase 4: Tomcat Web Application
+### âœ… Phase 4: Tomcat Web Application
 - **RegisterServlet.java** - User registration with MD5 hashing
 - **LoginServlet.java** - Authentication with session management
 - **LogoutServlet.java** - Session invalidation
@@ -29,31 +29,31 @@
 
 ---
 
-## 📋 Prerequisites
+## ðŸ“‹ Prerequisites
 
 Before you start, ensure you have:
 
 1. **Java JDK 8+** - [Download here](https://www.oracle.com/java/technologies/downloads/)
-2. **MySQL Server** - Already configured with:
+2. **PostgreSQL Server** - Already configured with:
    - Database: `jcloud`
    - Username: `root`
    - Password: `Jcloud@db`
-   - Port: `3306`
+   - Port: `5432`
 3. **Apache Tomcat 9.0+** - [Download here](https://tomcat.apache.org/download-90.cgi)
-4. **MySQL JDBC Driver** - [Download here](https://dev.mysql.com/downloads/connector/j/)
+4. **PostgreSQL JDBC Driver** - [Download here](https://dev.PostgreSQL.com/downloads/connector/j/)
 
 ---
 
-## 🗄️ Step 1: Database Setup
+## ðŸ—„ï¸ Step 1: Database Setup
 
 Your friend already created the database, so just verify it exists:
 
 ```cmd
-mysql -u root -pJcloud@db
+Use Neon SQL Editor or psql with JCLOUD_DB_URL
 ```
 
 ```sql
-USE jcloud;
+-- Use Neon database selected in JCLOUD_DB_URL
 SHOW TABLES;
 -- You should see: users, files, chunks, nodes, chunk_locations
 EXIT;
@@ -69,56 +69,56 @@ VALUES
 
 ---
 
-## 🔧 Step 2: Project Structure
+## ðŸ”§ Step 2: Project Structure
 
 Your project should look like this:
 
 ```
 J-Cloud/
-├── shared/              # Shared POJOs
-│   ├── User.java
-│   ├── NodeInfo.java
-│   ├── Chunk.java
-│   ├── ChunkLocation.java
-│   └── FileMetadata.java
-├── utils/               # Utilities
-│   └── DBConnection.java
-├── dao/                 # Data Access Objects
-│   ├── UserDAO.java
-│   └── NodeDAO.java
-├── master/              # Master Node
-│   ├── MasterServer.java
-│   ├── ClientHandler.java
-│   └── HeartbeatMonitor.java
-├── datanode/            # Data Nodes
-│   ├── DataNodeServer.java
-│   └── DataNode2Launcher.java
-├── webapp/              # Web Application
-│   ├── servlet/
-│   │   ├── RegisterServlet.java
-│   │   ├── LoginServlet.java
-│   │   └── LogoutServlet.java
-│   ├── WEB-INF/
-│   │   └── web.xml
-│   ├── index.jsp
-│   ├── register.jsp
-│   ├── login.jsp
-│   └── dashboard.jsp
-└── database/
-    └── schema.sql
+â”œâ”€â”€ shared/              # Shared POJOs
+â”‚   â”œâ”€â”€ User.java
+â”‚   â”œâ”€â”€ NodeInfo.java
+â”‚   â”œâ”€â”€ Chunk.java
+â”‚   â”œâ”€â”€ ChunkLocation.java
+â”‚   â””â”€â”€ FileMetadata.java
+â”œâ”€â”€ utils/               # Utilities
+â”‚   â””â”€â”€ DBConnection.java
+â”œâ”€â”€ dao/                 # Data Access Objects
+â”‚   â”œâ”€â”€ UserDAO.java
+â”‚   â””â”€â”€ NodeDAO.java
+â”œâ”€â”€ master/              # Master Node
+â”‚   â”œâ”€â”€ MasterServer.java
+â”‚   â”œâ”€â”€ ClientHandler.java
+â”‚   â””â”€â”€ HeartbeatMonitor.java
+â”œâ”€â”€ datanode/            # Data Nodes
+â”‚   â”œâ”€â”€ DataNodeServer.java
+â”‚   â””â”€â”€ DataNode2Launcher.java
+â”œâ”€â”€ webapp/              # Web Application
+â”‚   â”œâ”€â”€ servlet/
+â”‚   â”‚   â”œâ”€â”€ RegisterServlet.java
+â”‚   â”‚   â”œâ”€â”€ LoginServlet.java
+â”‚   â”‚   â””â”€â”€ LogoutServlet.java
+â”‚   â”œâ”€â”€ WEB-INF/
+â”‚   â”‚   â””â”€â”€ web.xml
+â”‚   â”œâ”€â”€ index.jsp
+â”‚   â”œâ”€â”€ register.jsp
+â”‚   â”œâ”€â”€ login.jsp
+â”‚   â””â”€â”€ dashboard.jsp
+â””â”€â”€ database/
+    â””â”€â”€ schema.sql
 ```
 
 ---
 
-## 🔨 Step 3: Compile the Project
+## ðŸ”¨ Step 3: Compile the Project
 
 ### Option A: Using Command Line
 
 ```cmd
 cd C:\Users\Pc\J-Cloud
 
-# Add MySQL JDBC driver to classpath (download mysql-connector-java-8.x.x.jar)
-set CLASSPATH=.;mysql-connector-java-8.0.33.jar
+# Add PostgreSQL JDBC driver to classpath (download postgresql-42.7.10.jar)
+set CLASSPATH=.;postgresql-42.7.10.jar
 
 # Compile all Java files
 javac -d bin shared/*.java
@@ -132,31 +132,31 @@ javac -d bin -cp bin webapp/servlet/*.java
 ### Option B: Using Eclipse/IntelliJ IDEA
 
 1. Import project as Java project
-2. Add MySQL JDBC driver to build path
+2. Add PostgreSQL JDBC driver to build path
 3. Project will compile automatically
 
 ---
 
-## 🚀 Step 4: Run the System (In Order!)
+## ðŸš€ Step 4: Run the System (In Order!)
 
 ### **STEP 1: Start Master Node**
 
 Open **Terminal 1**:
 ```cmd
 cd C:\Users\Pc\J-Cloud
-java -cp "bin;mysql-connector-java-8.0.33.jar" master.MasterServer
+java -cp "bin;postgresql-42.7.10.jar" master.MasterServer
 ```
 
 You should see:
 ```
-╔════════════════════════════════════════════╗
-║   J-CLOUD MASTER NODE STARTED              ║
-║   Port: 9000                               ║
-║   Thread Pool Size: 50                     ║
-╚════════════════════════════════════════════╝
+â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+â•‘   J-CLOUD MASTER NODE STARTED              â•‘
+â•‘   Port: 9000                               â•‘
+â•‘   Thread Pool Size: 50                     â•‘
+â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-✓ Database connection established successfully
-✓ Heartbeat monitor started (check interval: 10s, timeout: 15s)
+âœ“ Database connection established successfully
+âœ“ Heartbeat monitor started (check interval: 10s, timeout: 15s)
 ```
 
 ### **STEP 2: Start Data Node 1**
@@ -164,23 +164,23 @@ You should see:
 Open **Terminal 2**:
 ```cmd
 cd C:\Users\Pc\J-Cloud
-java -cp "bin;mysql-connector-java-8.0.33.jar" datanode.DataNodeServer DataNode1 9101
+java -cp "bin;postgresql-42.7.10.jar" datanode.DataNodeServer DataNode1 9101
 ```
 
 You should see:
 ```
-╔════════════════════════════════════════════╗
-║   J-CLOUD DATA NODE STARTING               ║
-║   Node: DataNode1                          ║
-║   Port: 9101                               ║
-╚════════════════════════════════════════════╝
+â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+â•‘   J-CLOUD DATA NODE STARTING               â•‘
+â•‘   Node: DataNode1                          â•‘
+â•‘   Port: 9101                               â•‘
+â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-→ Registering with Master Node at localhost:9000
+â†’ Registering with Master Node at localhost:9000
   Sent: REGISTER_NODE|DataNode1|localhost|9101|10737418240
   Response: OK|Node registered successfully
-✓ Registration successful!
+âœ“ Registration successful!
 
-♥ Starting heartbeat service (interval: 5s)
+â™¥ Starting heartbeat service (interval: 5s)
 ```
 
 ### **STEP 3: Start Data Node 2**
@@ -188,7 +188,7 @@ You should see:
 Open **Terminal 3**:
 ```cmd
 cd C:\Users\Pc\J-Cloud
-java -cp "bin;mysql-connector-java-8.0.33.jar" datanode.DataNode2Launcher
+java -cp "bin;postgresql-42.7.10.jar" datanode.DataNode2Launcher
 ```
 
 ### **STEP 4: Deploy Web Application to Tomcat**
@@ -196,19 +196,19 @@ java -cp "bin;mysql-connector-java-8.0.33.jar" datanode.DataNode2Launcher
 1. **Create WAR file structure:**
    ```
    jcloud.war/
-   ├── WEB-INF/
-   │   ├── web.xml
-   │   ├── classes/
-   │   │   ├── shared/
-   │   │   ├── utils/
-   │   │   ├── dao/
-   │   │   └── servlet/
-   │   └── lib/
-   │       └── mysql-connector-java-8.0.33.jar
-   ├── index.jsp
-   ├── register.jsp
-   ├── login.jsp
-   └── dashboard.jsp
+   â”œâ”€â”€ WEB-INF/
+   â”‚   â”œâ”€â”€ web.xml
+   â”‚   â”œâ”€â”€ classes/
+   â”‚   â”‚   â”œâ”€â”€ shared/
+   â”‚   â”‚   â”œâ”€â”€ utils/
+   â”‚   â”‚   â”œâ”€â”€ dao/
+   â”‚   â”‚   â””â”€â”€ servlet/
+   â”‚   â””â”€â”€ lib/
+   â”‚       â””â”€â”€ postgresql-42.7.10.jar
+   â”œâ”€â”€ index.jsp
+   â”œâ”€â”€ register.jsp
+   â”œâ”€â”€ login.jsp
+   â””â”€â”€ dashboard.jsp
    ```
 
 2. **Copy compiled classes:**
@@ -224,7 +224,7 @@ java -cp "bin;mysql-connector-java-8.0.33.jar" datanode.DataNode2Launcher
    ```cmd
    copy webapp\*.jsp jcloud\
    copy webapp\WEB-INF\web.xml jcloud\WEB-INF\
-   copy mysql-connector-java-8.0.33.jar jcloud\WEB-INF\lib\
+   copy postgresql-42.7.10.jar jcloud\WEB-INF\lib\
    ```
 
 4. **Deploy to Tomcat:**
@@ -233,7 +233,7 @@ java -cp "bin;mysql-connector-java-8.0.33.jar" datanode.DataNode2Launcher
 
 ---
 
-## 🧪 Step 5: Test the System
+## ðŸ§ª Step 5: Test the System
 
 ### Test 1: Verify Master Node Health
 Open browser: `http://localhost:9000`
@@ -268,63 +268,63 @@ SELECT * FROM nodes;
 
 ---
 
-## 📊 System Architecture
+## ðŸ“Š System Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  TOMCAT (8080)                      │
-│   ┌────────────┐  ┌──────────┐  ┌──────────────┐   │
-│   │ Register   │  │  Login   │  │  Dashboard   │   │
-│   │  Servlet   │  │ Servlet  │  │     JSP      │   │
-│   └─────┬──────┘  └────┬─────┘  └──────────────┘   │
-└─────────┼───────────────┼──────────────────────────┘
-          │               │
-          └───────┬───────┘
-                  │
-         ┌────────▼─────────┐
-         │   UserDAO        │
-         │   (Thread-safe)  │
-         └────────┬─────────┘
-                  │
-         ┌────────▼──────────┐
-         │   DBConnection    │
-         │   (Singleton)     │
-         └────────┬──────────┘
-                  │
-         ┌────────▼──────────┐
-         │  MySQL Database   │
-         │   (localhost)     │
-         └───────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                  TOMCAT (8080)                      â”‚
+â”‚   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚
+â”‚   â”‚ Register   â”‚  â”‚  Login   â”‚  â”‚  Dashboard   â”‚   â”‚
+â”‚   â”‚  Servlet   â”‚  â”‚ Servlet  â”‚  â”‚     JSP      â”‚   â”‚
+â”‚   â””â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+          â”‚               â”‚
+          â””â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”˜
+                  â”‚
+         â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+         â”‚   UserDAO        â”‚
+         â”‚   (Thread-safe)  â”‚
+         â””â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                  â”‚
+         â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+         â”‚   DBConnection    â”‚
+         â”‚   (Singleton)     â”‚
+         â””â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                  â”‚
+         â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+         â”‚  PostgreSQL Database   â”‚
+         â”‚   (localhost)     â”‚
+         â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 
-┌────────────────────────────────────────────────────┐
-│           MASTER NODE (9000)                       │
-│   ┌──────────────────────────────────────────┐    │
-│   │  Thread Pool (50 threads)                │    │
-│   │  ┌────────────┐  ┌──────────────────┐    │    │
-│   │  │  Client    │  │   Heartbeat      │    │    │
-│   │  │  Handler   │  │   Monitor        │    │    │
-│   │  └────────────┘  └──────────────────┘    │    │
-│   └──────────────────────────────────────────┘    │
-│   ConcurrentHashMap<Node, Timestamp>              │
-└───────────┬───────────────────┬───────────────────┘
-            │                   │
-    ┌───────▼──────┐    ┌──────▼──────┐
-    │  Data Node 1 │    │ Data Node 2 │
-    │ (Port 9101)  │    │ (Port 9102) │
-    │              │    │             │
-    │ ♥ Heartbeat  │    │ ♥ Heartbeat │
-    │   (5s)       │    │   (5s)      │
-    └──────────────┘    └─────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚           MASTER NODE (9000)                       â”‚
+â”‚   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”‚
+â”‚   â”‚  Thread Pool (50 threads)                â”‚    â”‚
+â”‚   â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”‚    â”‚
+â”‚   â”‚  â”‚  Client    â”‚  â”‚   Heartbeat      â”‚    â”‚    â”‚
+â”‚   â”‚  â”‚  Handler   â”‚  â”‚   Monitor        â”‚    â”‚    â”‚
+â”‚   â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â”‚    â”‚
+â”‚   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â”‚
+â”‚   ConcurrentHashMap<Node, Timestamp>              â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+            â”‚                   â”‚
+    â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”    â”Œâ”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”
+    â”‚  Data Node 1 â”‚    â”‚ Data Node 2 â”‚
+    â”‚ (Port 9101)  â”‚    â”‚ (Port 9102) â”‚
+    â”‚              â”‚    â”‚             â”‚
+    â”‚ â™¥ Heartbeat  â”‚    â”‚ â™¥ Heartbeat â”‚
+    â”‚   (5s)       â”‚    â”‚   (5s)      â”‚
+    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ---
 
-## 🔑 Key Configuration
+## ðŸ”‘ Key Configuration
 
 All configuration is centralized in `DBConnection.java`:
 
 ```java
-DB_URL = "jdbc:mysql://localhost:3306/jcloud"
+DB_URL = "jdbc:PostgreSQL://Neon via .env (JCLOUD_DB_URL)/jcloud"
 DB_USER = "root"
 DB_PASSWORD = "Jcloud@db"
 ```
@@ -332,16 +332,16 @@ DB_PASSWORD = "Jcloud@db"
 Master Node: `localhost:9000`
 Data Node 1: `localhost:9101`
 Data Node 2: `localhost:9102`
-MySQL: `localhost:3306`
+PostgreSQL: `Neon via .env (JCLOUD_DB_URL)`
 Tomcat: `localhost:8080`
 
 ---
 
-## 🐛 Troubleshooting
+## ðŸ› Troubleshooting
 
 ### Issue: "Cannot connect to database"
-- Verify MySQL is running: `net start MySQL80`
-- Check credentials: `mysql -u root -pJcloud@db`
+- Verify PostgreSQL is running: `No local DB service required (Neon cloud DB)`
+- Check credentials: `Use Neon SQL Editor or psql with JCLOUD_DB_URL`
 - Ensure JDBC driver is in classpath
 
 ### Issue: "Master Node connection refused"
@@ -357,11 +357,11 @@ Tomcat: `localhost:8080`
 ### Issue: "Tomcat 404 error"
 - Verify WAR deployed to `webapps/jcloud`
 - Check Tomcat logs in `logs/catalina.out`
-- Ensure MySQL JDBC driver in `WEB-INF/lib/`
+- Ensure PostgreSQL JDBC driver in `WEB-INF/lib/`
 
 ---
 
-## 📈 Next Steps
+## ðŸ“ˆ Next Steps
 
 Now that core infrastructure is running, you can implement:
 
@@ -373,20 +373,20 @@ Now that core infrastructure is running, you can implement:
 
 ---
 
-## 🎉 Success Indicators
+## ðŸŽ‰ Success Indicators
 
 When everything is working:
 
-✅ Master Node shows heartbeat monitor running
-✅ Both Data Nodes show "Heartbeat sent and acknowledged"
-✅ MySQL `nodes` table shows both nodes as ACTIVE
-✅ Tomcat accessible at http://localhost:8080
-✅ Can register and login via web interface
-✅ Dashboard displays user information
+âœ… Master Node shows heartbeat monitor running
+âœ… Both Data Nodes show "Heartbeat sent and acknowledged"
+âœ… PostgreSQL `nodes` table shows both nodes as ACTIVE
+âœ… Tomcat accessible at http://localhost:8080
+âœ… Can register and login via web interface
+âœ… Dashboard displays user information
 
 ---
 
-## 💡 Development Tips
+## ðŸ’¡ Development Tips
 
 - **Use separate terminals** for each component (easier debugging)
 - **Check logs** in each terminal for errors
@@ -396,4 +396,4 @@ When everything is working:
 
 ---
 
-Built with ❤️ using scalable Java patterns: Thread Pools, Connection Pooling, Scheduled Executors, and Concurrent Data Structures.
+Built with â¤ï¸ using scalable Java patterns: Thread Pools, Connection Pooling, Scheduled Executors, and Concurrent Data Structures.

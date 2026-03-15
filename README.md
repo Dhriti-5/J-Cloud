@@ -5,7 +5,7 @@ J-Cloud is a production-ready distributed object storage system inspired by HDFS
 ## 🎯 Project Status: **ALL 4 PHASES COMPLETE ✅**
 
 ### ✅ Phase 1: Database & Shared Layer
-- Singleton pattern for MySQL connection pooling
+- Singleton pattern for PostgreSQL connection pooling
 - UserDAO and NodeDAO with prepared statements
 - Shared POJOs with proper encapsulation
 
@@ -32,7 +32,7 @@ J-Cloud is a production-ready distributed object storage system inspired by HDFS
 - ✅ **Distributed Architecture** - Master-Worker pattern with multiple data nodes
 - ✅ **Thread Pool Management** - Scalable connection handling
 - ✅ **Health Monitoring** - Automatic node death detection
-- ✅ **Database Persistence** - Centralized MySQL storage
+- ✅ **Database Persistence** - Shared Neon PostgreSQL storage
 - ✅ **User Authentication** - Secure login/registration system
 - ✅ **Web Interface** - Modern JSP-based UI
 - ⏳ **File Chunking** - (Coming next)
@@ -59,8 +59,8 @@ J-Cloud is a production-ready distributed object storage system inspired by HDFS
          └────────┬──────────┘
                   │
          ┌────────▼──────────┐
-         │  MySQL Database   │
-         │  (Centralized)    │
+         │ Neon PostgreSQL   │
+         │  (Shared Cloud)   │
          └───────────────────┘
 
 ┌────────────────────────────────────────────────────┐
@@ -80,7 +80,7 @@ J-Cloud is a production-ready distributed object storage system inspired by HDFS
 
 - **Backend:** Java 8+ with Sockets, Thread Pools, Scheduled Executors
 - **Web Layer:** Servlets 4.0, JSP, Session Management
-- **Database:** MySQL 8.0 with JDBC
+- **Database:** PostgreSQL (Neon) with JDBC
 - **Server:** Apache Tomcat 9.0
 - **Patterns:** Singleton, DAO, MVC, Thread Pool
 
@@ -90,7 +90,7 @@ J-Cloud is a production-ready distributed object storage system inspired by HDFS
 - **Master Node:** `localhost:9000`
 - **Data Node 1:** `localhost:9101`
 - **Data Node 2:** `localhost:9102`
-- **MySQL Database:** `localhost:3306`
+- **Database:** Neon PostgreSQL (`.env` -> `JCLOUD_DB_URL`)
 - **Tomcat Server:** `localhost:8080`
 
 

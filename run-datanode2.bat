@@ -11,15 +11,19 @@ echo Master: localhost:9000
 echo.
 
 set JDBC_DRIVER=
-for %%F in (mysql-connector-j-*.jar mysql-connector-java-*.jar) do (
+for %%F in (postgresql-*.jar) do (
 	if not defined JDBC_DRIVER set JDBC_DRIVER=%%F
 )
 
 if not defined JDBC_DRIVER (
-	echo ERROR: MySQL JDBC driver jar not found in project root.
-	echo Place one of these files in this folder:
-	echo   - mysql-connector-j-*.jar
-	echo   - mysql-connector-java-*.jar
+	for %%F in (webapp\WEB-INF\lib\postgresql-*.jar jcloud\WEB-INF\lib\postgresql-*.jar) do (
+		if not defined JDBC_DRIVER set JDBC_DRIVER=%%F
+	)
+)
+
+if not defined JDBC_DRIVER (
+	echo ERROR: PostgreSQL JDBC driver jar not found.
+	echo Place postgresql-*.jar in the project root, webapp\WEB-INF\lib, or jcloud\WEB-INF\lib.
 	pause
 	exit /b 1
 )
