@@ -135,12 +135,6 @@ Test heartbeat system:
 4. Kill Data Node (Ctrl+C)
 5. Wait 15 seconds - Master marks it DEAD
 
-## 📚 Documentation
-
-- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Complete setup and deployment instructions
-- **[database/schema.sql](database/schema.sql)** - Database schema
-- **Protocol Format:** Pipe-delimited strings (`REGISTER_NODE|name|ip|port|capacity`)
-
 ## 🔑 Key Design Patterns
 
 1. **Singleton Pattern** - `DBConnection.java` prevents connection pool exhaustion
