@@ -1,7 +1,9 @@
 package datanode;
 
 import java.io.*;
+import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Objects;
 import java.util.concurrent.*;
 
 /**
@@ -31,6 +33,11 @@ public class DataNodeServer {
     private ScheduledExecutorService heartbeatService;
     private volatile boolean running = true;
 
+    // Storage server configuration
+    private ServerSocket storageSocket;
+    private ExecutorService storageExecutor;
+    private static final String STORAGE_DIR = "storage";
+
     /**
      * Constructor for Data Node
      */
@@ -40,6 +47,7 @@ public class DataNodeServer {
         this.port = port;
         this.storageCapacity = storageCapacity;
         this.heartbeatService = Executors.newScheduledThreadPool(1);
+        this.storageExecutor = Executors.newFixedThreadPool(10);
     }
 
     /**
@@ -60,6 +68,9 @@ public class DataNodeServer {
 
         // Step 2: Start periodic heartbeat
         startHeartbeat();
+
+        // Step 3: Start storage listener for chunk upload/download
+        startStorageServer();
 
         System.out.println("\n✓ Data Node is now running and sending heartbeats");
         System.out.println("  Press Ctrl+C to stop\n");
@@ -158,6 +169,144 @@ public class DataNodeServer {
     }
 
     /**
+     * Start a socket server to accept chunk storage requests from the Master Node.
+     */
+    private void startStorageServer() {
+        ensureStorageDirectoryExists();
+
+        try {
+            storageSocket = new ServerSocket(port);
+            System.out.println("⇨ Storage server listening on port " + port + " (storage dir: " + new File(STORAGE_DIR).getAbsolutePath() + ")");
+
+            Thread acceptThread = new Thread(() -> {
+                while (running && !storageSocket.isClosed()) {
+                    try {
+                        Socket client = storageSocket.accept();
+                        storageExecutor.execute(new StorageHandler(client));
+                    } catch (IOException e) {
+                        if (running) {
+                            System.err.println("✗ Error accepting storage connection: " + e.getMessage());
+                        }
+                    }
+                }
+            });
+            acceptThread.setDaemon(true);
+            acceptThread.start();
+
+        } catch (IOException e) {
+            System.err.println("✗ Failed to start storage listener on port " + port);
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Ensure the storage directory exists (creates it if missing).
+     */
+    private void ensureStorageDirectoryExists() {
+        File dir = new File(STORAGE_DIR);
+        if (!dir.exists()) {
+            boolean created = dir.mkdirs();
+            if (!created) {
+                System.err.println("⚠ Failed to create storage directory: " + dir.getAbsolutePath());
+            }
+        }
+    }
+
+    /**
+     * Handler for incoming client requests to store or retrieve chunks.
+     */
+    private class StorageHandler implements Runnable {
+        private final Socket socket;
+
+        StorageHandler(Socket socket) {
+            this.socket = socket;
+        }
+
+        @Override
+        public void run() {
+            try (DataInputStream in = new DataInputStream(socket.getInputStream());
+                 DataOutputStream out = new DataOutputStream(socket.getOutputStream())) {
+
+                String request = in.readUTF();
+                if (request == null || request.isEmpty()) {
+                    return;
+                }
+
+                String[] parts = request.split("\\|", 6);
+                String command = parts[0];
+
+                switch (command) {
+                    case "STORE_CHUNK":
+                        handleStoreChunk(parts, in, out);
+                        break;
+                    case "GET_CHUNK":
+                        handleGetChunk(parts, out);
+                        break;
+                    default:
+                        out.writeUTF("ERROR|Unknown command");
+                        break;
+                }
+
+            } catch (IOException e) {
+                System.err.println("✗ Storage handler error: " + e.getMessage());
+            } finally {
+                try {
+                    socket.close();
+                } catch (IOException ignored) {
+                }
+            }
+        }
+
+        private void handleStoreChunk(String[] parts, DataInputStream in, DataOutputStream out) throws IOException {
+            if (parts.length < 6) {
+                out.writeUTF("ERROR|Invalid STORE_CHUNK format");
+                return;
+            }
+
+            int chunkId = Integer.parseInt(parts[1]);
+            int chunkIndex = Integer.parseInt(parts[2]);
+            int fileId = Integer.parseInt(parts[3]);
+            int chunkSize = Integer.parseInt(parts[4]);
+            String fileName = parts[5];
+
+            byte[] chunkData = new byte[chunkSize];
+            in.readFully(chunkData);
+
+            File chunkFile = new File(STORAGE_DIR, String.format("chunk_%d_%d_%d.dat", fileId, chunkIndex, chunkId));
+            try (FileOutputStream fos = new FileOutputStream(chunkFile)) {
+                fos.write(chunkData);
+                fos.flush();
+            }
+
+            out.writeUTF("OK|STORED");
+        }
+
+        private void handleGetChunk(String[] parts, DataOutputStream out) throws IOException {
+            if (parts.length < 2) {
+                out.writeUTF("ERROR|Invalid GET_CHUNK format");
+                return;
+            }
+
+            int chunkId = Integer.parseInt(parts[1]);
+            File[] matches = new File(STORAGE_DIR).listFiles((dir, name) -> name.contains("_" + chunkId + "."));
+
+            if (matches == null || matches.length == 0) {
+                out.writeUTF("ERROR|Chunk not found");
+                return;
+            }
+
+            File chunkFile = matches[0];
+            byte[] data = new byte[(int) chunkFile.length()];
+            try (FileInputStream fis = new FileInputStream(chunkFile)) {
+                fis.read(data);
+            }
+
+            out.writeUTF("OK|" + data.length);
+            out.write(data);
+        }
+    }
+
+    /**
      * Graceful shutdown
      */
     public void shutdown() {
@@ -172,6 +321,25 @@ public class DataNodeServer {
             }
         } catch (InterruptedException e) {
             heartbeatService.shutdownNow();
+        }
+
+        // Shutdown storage listener
+        if (storageSocket != null && !storageSocket.isClosed()) {
+            try {
+                storageSocket.close();
+            } catch (IOException ignored) {
+            }
+        }
+
+        if (storageExecutor != null) {
+            storageExecutor.shutdown();
+            try {
+                if (!storageExecutor.awaitTermination(3, TimeUnit.SECONDS)) {
+                    storageExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                storageExecutor.shutdownNow();
+            }
         }
 
         System.out.println("✓ Data Node stopped");
