@@ -163,7 +163,7 @@
         <h1>☁️ J-Cloud Dashboard</h1>
         <div class="user-info">
             <span>Welcome, <strong><%= user.getUsername() %></strong></span>
-            <a href="logout" class="logout-btn">Logout</a>
+            <a href="<%= request.getContextPath() %>/logout" class="logout-btn">Logout</a>
         </div>
     </div>
     
@@ -203,7 +203,7 @@
         <div class="actions-card">
             <h3>Quick Actions</h3>
             <div class="action-buttons">
-                <a href="#" class="action-btn">📤 Upload File</a>
+                <a href="upload.jsp" class="action-btn">📤 Upload File</a>
                 <a href="#" class="action-btn">📥 Download File</a>
                 <a href="#" class="action-btn">📋 My Files</a>
                 <a href="#" class="action-btn">⚙️ Settings</a>

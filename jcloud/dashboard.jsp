@@ -203,7 +203,7 @@
         <div class="actions-card">
             <h3>Quick Actions</h3>
             <div class="action-buttons">
-                <a href="#" class="action-btn">📤 Upload File</a>
+                <a href="<%= request.getContextPath() %>/upload" class="action-btn">📤 Upload File</a>
                 <a href="#" class="action-btn">📥 Download File</a>
                 <a href="#" class="action-btn">📋 My Files</a>
                 <a href="#" class="action-btn">⚙️ Settings</a>
