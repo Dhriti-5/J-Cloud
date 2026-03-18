@@ -1,399 +1,380 @@
 ﻿# J-Cloud - Setup & Deployment Guide
 
-## ðŸŽ¯ What We Built - All 4 Phases Complete!
+## 🎯 What We Built - All 5 Phases Complete!
 
-### âœ… Phase 1: Database & Shared Layer
+### ✅ Phase 1: Database & Shared Layer
 - **DBConnection.java** - Thread-safe Singleton for PostgreSQL connections
 - **UserDAO.java** - User registration and authentication
 - **NodeDAO.java** - Node registration and status management
+- **FileDAO.java** - File metadata management
+- **ChunkDAO.java** - Chunk metadata management
+- **ChunkLocationDAO.java** - Chunk-to-node mapping
 - **Shared POJOs** - User, NodeInfo, Chunk, ChunkLocation, FileMetadata (with getters/setters)
 
-### âœ… Phase 2: Scalable Master Node
+### ✅ Phase 2: Scalable Master Node
 - **MasterServer.java** - Main server with 50-thread pool
 - **ClientHandler.java** - Protocol parser (REGISTER_NODE, HEARTBEAT, PING)
 - **HeartbeatMonitor.java** - Scheduled death detector (15s timeout)
 - ConcurrentHashMap for thread-safe node tracking
 
-### âœ… Phase 3: Data Node Development
-- **DataNodeServer.java** - Auto-registration with Master
+### ✅ Phase 3: Data Node Development
+- **DataNodeServer.java** - Auto-registration with Master, chunk storage server
 - **DataNode2Launcher.java** - Quick launcher for second node
 - Scheduled heartbeat every 5 seconds
 - Graceful shutdown hooks
+- Chunk files stored as `chunk_fileId_chunkIndex_chunkId.dat` in `storage/` folder
 
-### âœ… Phase 4: Tomcat Web Application
+### ✅ Phase 4: Tomcat Web Application
 - **RegisterServlet.java** - User registration with MD5 hashing
 - **LoginServlet.java** - Authentication with session management
 - **LogoutServlet.java** - Session invalidation
 - **register.jsp, login.jsp, dashboard.jsp** - Beautiful UI pages
 - **web.xml** - Tomcat configuration
 
+### ✅ Phase 5: File Upload (Day 5)
+- **UploadServlet.java** - Chunked parallel file upload to data nodes
+- **upload.jsp** - Drag and drop upload UI with progress bar
+- **dashboard.jsp** - Updated with live file count, storage used, active node list
+- Round-robin chunk distribution using Java ExecutorService
+
 ---
 
-## ðŸ“‹ Prerequisites
+## 📋 Prerequisites
 
 Before you start, ensure you have:
 
 1. **Java JDK 8+** - [Download here](https://www.oracle.com/java/technologies/downloads/)
-2. **PostgreSQL Server** - Already configured with:
-   - Database: `jcloud`
-   - Username: `root`
-   - Password: `Jcloud@db`
-   - Port: `5432`
-3. **Apache Tomcat 9.0+** - [Download here](https://tomcat.apache.org/download-90.cgi)
-4. **PostgreSQL JDBC Driver** - [Download here](https://dev.PostgreSQL.com/downloads/connector/j/)
+2. **Neon PostgreSQL** - Cloud database configured via `.env` file
+3. **Apache Tomcat 9.0+** - Already available inside `%TOMCAT_HOME%` folder in the repo
+4. **PostgreSQL JDBC Driver** - `webapp\WEB-INF\lib\postgresql-42.7.10.jar`
+5. **servlet-api.jar** - In project root `D:\j-cloud\servlet-api.jar`
 
 ---
 
-## ðŸ—„ï¸ Step 1: Database Setup
+## 🗄️ Step 1: Database Setup
 
-Your friend already created the database, so just verify it exists:
-
-```cmd
-Use Neon SQL Editor or psql with JCLOUD_DB_URL
+Your `.env` file must exist at `D:\j-cloud\.env`:
+```
+JCLOUD_DB_URL=postgresql://user:password@host/neondb?sslmode=require&channel_binding=require
 ```
 
+Verify tables in Neon SQL Editor:
 ```sql
--- Use Neon database selected in JCLOUD_DB_URL
-SHOW TABLES;
--- You should see: users, files, chunks, nodes, chunk_locations
-EXIT;
+SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';
+-- Should show: users, files, chunks, nodes, chunk_locations
 ```
 
 If nodes are not populated:
 ```sql
-INSERT INTO nodes (node_name, ip_address, port, status, storage_capacity) 
-VALUES 
+INSERT INTO nodes (node_name, ip_address, port, status, storage_capacity)
+VALUES
   ('DataNode1', 'localhost', 9101, 'ACTIVE', 10737418240),
   ('DataNode2', 'localhost', 9102, 'ACTIVE', 10737418240);
 ```
 
 ---
 
-## ðŸ”§ Step 2: Project Structure
+## 🔧 Step 2: Project Structure
 
 Your project should look like this:
-
 ```
 J-Cloud/
-â”œâ”€â”€ shared/              # Shared POJOs
-â”‚   â”œâ”€â”€ User.java
-â”‚   â”œâ”€â”€ NodeInfo.java
-â”‚   â”œâ”€â”€ Chunk.java
-â”‚   â”œâ”€â”€ ChunkLocation.java
-â”‚   â””â”€â”€ FileMetadata.java
-â”œâ”€â”€ utils/               # Utilities
-â”‚   â””â”€â”€ DBConnection.java
-â”œâ”€â”€ dao/                 # Data Access Objects
-â”‚   â”œâ”€â”€ UserDAO.java
-â”‚   â””â”€â”€ NodeDAO.java
-â”œâ”€â”€ master/              # Master Node
-â”‚   â”œâ”€â”€ MasterServer.java
-â”‚   â”œâ”€â”€ ClientHandler.java
-â”‚   â””â”€â”€ HeartbeatMonitor.java
-â”œâ”€â”€ datanode/            # Data Nodes
-â”‚   â”œâ”€â”€ DataNodeServer.java
-â”‚   â””â”€â”€ DataNode2Launcher.java
-â”œâ”€â”€ webapp/              # Web Application
-â”‚   â”œâ”€â”€ servlet/
-â”‚   â”‚   â”œâ”€â”€ RegisterServlet.java
-â”‚   â”‚   â”œâ”€â”€ LoginServlet.java
-â”‚   â”‚   â””â”€â”€ LogoutServlet.java
-â”‚   â”œâ”€â”€ WEB-INF/
-â”‚   â”‚   â””â”€â”€ web.xml
-â”‚   â”œâ”€â”€ index.jsp
-â”‚   â”œâ”€â”€ register.jsp
-â”‚   â”œâ”€â”€ login.jsp
-â”‚   â””â”€â”€ dashboard.jsp
-â””â”€â”€ database/
-    â””â”€â”€ schema.sql
+├── shared/              # Shared POJOs
+├── utils/               # DBConnection singleton
+├── dao/                 # Data Access Objects
+├── master/              # Master Node
+├── datanode/            # Data Nodes
+├── webapp/              # Web Application (edit files here)
+│   ├── servlet/
+│   │   ├── LoginServlet.java
+│   │   ├── LogoutServlet.java
+│   │   ├── RegisterServlet.java
+│   │   └── UploadServlet.java
+│   ├── WEB-INF/
+│   │   ├── web.xml
+│   │   └── lib/
+│   │       └── postgresql-42.7.10.jar
+│   ├── index.jsp
+│   ├── login.jsp
+│   ├── register.jsp
+│   ├── dashboard.jsp
+│   └── upload.jsp
+├── %TOMCAT_HOME%/       # Tomcat — deployment goes here
+│   └── webapps/
+│       └── jcloud/
+│           ├── WEB-INF/
+│           │   ├── classes/
+│           │   │   ├── shared/
+│           │   │   ├── utils/
+│           │   │   ├── dao/
+│           │   │   └── servlet/
+│           │   ├── lib/
+│           │   │   └── postgresql-42.7.10.jar
+│           │   └── web.xml
+│           ├── index.jsp
+│           ├── login.jsp
+│           ├── register.jsp
+│           ├── dashboard.jsp
+│           └── upload.jsp
+├── database/
+│   └── schema_postgres.sql
+├── bin/                 # Compiled classes
+├── storage/             # Chunk .dat files
+└── servlet-api.jar
 ```
 
 ---
 
-## ðŸ”¨ Step 3: Compile the Project
+## 🔨 Step 3: Compile the Project
 
-### Option A: Using Command Line
-
-```cmd
-cd C:\Users\Pc\J-Cloud
-
-# Add PostgreSQL JDBC driver to classpath (download postgresql-42.7.10.jar)
-set CLASSPATH=.;postgresql-42.7.10.jar
-
-# Compile all Java files
-javac -d bin shared/*.java
-javac -d bin -cp bin utils/*.java
-javac -d bin -cp bin dao/*.java
-javac -d bin -cp bin master/*.java
-javac -d bin -cp bin datanode/*.java
-javac -d bin -cp bin webapp/servlet/*.java
+Run `compile.bat` from `D:\j-cloud`:
+```powershell
+compile.bat
 ```
 
-### Option B: Using Eclipse/IntelliJ IDEA
-
-1. Import project as Java project
-2. Add PostgreSQL JDBC driver to build path
-3. Project will compile automatically
+`compile.bat` automatically:
+- Finds the PostgreSQL JDBC driver
+- Finds `servlet-api.jar` from project root or Tomcat
+- Compiles shared, utils, dao, master, datanode, and servlet classes
+- Outputs compiled `.class` files to `bin\`
 
 ---
 
-## ðŸš€ Step 4: Run the System (In Order!)
+## 🚀 Step 4: Deploy to `%TOMCAT_HOME%`
 
-### **STEP 1: Start Master Node**
-
-Open **Terminal 1**:
-```cmd
-cd C:\Users\Pc\J-Cloud
-java -cp "bin;postgresql-42.7.10.jar" master.MasterServer
+Copy compiled classes and JSPs into the `%TOMCAT_HOME%` folder that already exists in the repo:
+```powershell
+Copy-Item -Recurse -Force bin\shared\*   "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\shared\"
+Copy-Item -Recurse -Force bin\utils\*    "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\utils\"
+Copy-Item -Recurse -Force bin\dao\*      "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\dao\"
+Copy-Item -Recurse -Force bin\servlet\*  "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\servlet\"
+Copy-Item -Force "webapp\WEB-INF\lib\postgresql-42.7.10.jar" "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\lib\"
+Copy-Item -Force "webapp\WEB-INF\web.xml"                    "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\web.xml"
+Copy-Item -Force webapp\index.jsp     "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\index.jsp"
+Copy-Item -Force webapp\login.jsp     "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\login.jsp"
+Copy-Item -Force webapp\register.jsp  "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\register.jsp"
+Copy-Item -Force webapp\dashboard.jsp "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\dashboard.jsp"
+Copy-Item -Force webapp\upload.jsp    "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\upload.jsp"
 ```
 
+---
+
+## 🚀 Step 5: Run the System (In Order!)
+
+Open **4 separate PowerShell terminals**, all from `D:\j-cloud`:
+
+### STEP 1: Start Master Node
+
+**Terminal 1:**
+```powershell
+./run-master.bat
+```
 You should see:
 ```
-â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-â•‘   J-CLOUD MASTER NODE STARTED              â•‘
-â•‘   Port: 9000                               â•‘
-â•‘   Thread Pool Size: 50                     â•‘
-â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+╔════════════════════════════════════════════╗
+║   J-CLOUD MASTER NODE STARTED              ║
+║   Port: 9000                               ║
+║   Thread Pool Size: 50                     ║
+╚════════════════════════════════════════════╝
 
-âœ“ Database connection established successfully
-âœ“ Heartbeat monitor started (check interval: 10s, timeout: 15s)
+✓ Database connection established successfully
+✓ Heartbeat monitor started (check interval: 10s, timeout: 15s)
 ```
 
-### **STEP 2: Start Data Node 1**
+### STEP 2: Start Data Node 1
 
-Open **Terminal 2**:
-```cmd
-cd C:\Users\Pc\J-Cloud
-java -cp "bin;postgresql-42.7.10.jar" datanode.DataNodeServer DataNode1 9101
+**Terminal 2:**
+```powershell
+./run-datanode1.bat
 ```
-
 You should see:
 ```
-â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-â•‘   J-CLOUD DATA NODE STARTING               â•‘
-â•‘   Node: DataNode1                          â•‘
-â•‘   Port: 9101                               â•‘
-â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-
-â†’ Registering with Master Node at localhost:9000
+→ Registering with Master Node at localhost:9000
   Sent: REGISTER_NODE|DataNode1|localhost|9101|10737418240
   Response: OK|Node registered successfully
-âœ“ Registration successful!
+✓ Registration successful!
 
-â™¥ Starting heartbeat service (interval: 5s)
+♥ Starting heartbeat service (interval: 5s)
+♥ Heartbeat sent and acknowledged
 ```
 
-### **STEP 3: Start Data Node 2**
+### STEP 3: Start Data Node 2
 
-Open **Terminal 3**:
-```cmd
-cd C:\Users\Pc\J-Cloud
-java -cp "bin;postgresql-42.7.10.jar" datanode.DataNode2Launcher
+**Terminal 3:**
+```powershell
+./run-datanode2.bat
 ```
 
-### **STEP 4: Deploy Web Application to Tomcat**
+### STEP 4: Start Tomcat
 
-1. **Create WAR file structure:**
-   ```
-   jcloud.war/
-   â”œâ”€â”€ WEB-INF/
-   â”‚   â”œâ”€â”€ web.xml
-   â”‚   â”œâ”€â”€ classes/
-   â”‚   â”‚   â”œâ”€â”€ shared/
-   â”‚   â”‚   â”œâ”€â”€ utils/
-   â”‚   â”‚   â”œâ”€â”€ dao/
-   â”‚   â”‚   â””â”€â”€ servlet/
-   â”‚   â””â”€â”€ lib/
-   â”‚       â””â”€â”€ postgresql-42.7.10.jar
-   â”œâ”€â”€ index.jsp
-   â”œâ”€â”€ register.jsp
-   â”œâ”€â”€ login.jsp
-   â””â”€â”€ dashboard.jsp
-   ```
-
-2. **Copy compiled classes:**
-   ```cmd
-   mkdir jcloud\WEB-INF\classes
-   xcopy /E /I bin\shared jcloud\WEB-INF\classes\shared
-   xcopy /E /I bin\utils jcloud\WEB-INF\classes\utils
-   xcopy /E /I bin\dao jcloud\WEB-INF\classes\dao
-   xcopy /E /I bin\servlet jcloud\WEB-INF\classes\servlet
-   ```
-
-3. **Copy JSP and config files:**
-   ```cmd
-   copy webapp\*.jsp jcloud\
-   copy webapp\WEB-INF\web.xml jcloud\WEB-INF\
-   copy postgresql-42.7.10.jar jcloud\WEB-INF\lib\
-   ```
-
-4. **Deploy to Tomcat:**
-   - Copy `jcloud` folder to `%CATALINA_HOME%\webapps\`
-   - Start Tomcat: `%CATALINA_HOME%\bin\startup.bat`
+**Terminal 4:**
+```powershell
+& "C:\Program Files\Apache Software Foundation\Tomcat 9.0\bin\startup.bat"
+```
 
 ---
 
-## ðŸ§ª Step 5: Test the System
+## 🧪 Step 5: Test the System
 
-### Test 1: Verify Master Node Health
-Open browser: `http://localhost:9000`
-Or use telnet:
-```cmd
-telnet localhost 9000
-PING
-```
-Should respond: `PONG`
-
-### Test 2: Check Database Nodes
+### Test 1: Check Database Nodes
 ```sql
 SELECT * FROM nodes;
 -- Should show DataNode1 and DataNode2 as ACTIVE
 ```
 
-### Test 3: Test Heartbeat Death Detection
+### Test 2: Test Heartbeat Death Detection
 - Kill one Data Node (Ctrl+C in its terminal)
 - Wait 15 seconds
 - Master should mark it as DEAD
 - Check: `SELECT * FROM nodes;`
 
-### Test 4: Test Web Application
+### Test 3: Test Web Application
 
 1. **Access the app:** `http://localhost:8080/jcloud`
-2. **Register a new user:**
-   - Username: `testuser`
-   - Email: `test@jcloud.com`
-   - Password: `test123`
+2. **Register a new user**
 3. **Login with credentials**
-4. **View dashboard**
-
----
-
-## ðŸ“Š System Architecture
-
-```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                  TOMCAT (8080)                      â”‚
-â”‚   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚
-â”‚   â”‚ Register   â”‚  â”‚  Login   â”‚  â”‚  Dashboard   â”‚   â”‚
-â”‚   â”‚  Servlet   â”‚  â”‚ Servlet  â”‚  â”‚     JSP      â”‚   â”‚
-â”‚   â””â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-          â”‚               â”‚
-          â””â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”˜
-                  â”‚
-         â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-         â”‚   UserDAO        â”‚
-         â”‚   (Thread-safe)  â”‚
-         â””â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                  â”‚
-         â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-         â”‚   DBConnection    â”‚
-         â”‚   (Singleton)     â”‚
-         â””â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                  â”‚
-         â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-         â”‚  PostgreSQL Database   â”‚
-         â”‚   (localhost)     â”‚
-         â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚           MASTER NODE (9000)                       â”‚
-â”‚   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”‚
-â”‚   â”‚  Thread Pool (50 threads)                â”‚    â”‚
-â”‚   â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”‚    â”‚
-â”‚   â”‚  â”‚  Client    â”‚  â”‚   Heartbeat      â”‚    â”‚    â”‚
-â”‚   â”‚  â”‚  Handler   â”‚  â”‚   Monitor        â”‚    â”‚    â”‚
-â”‚   â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â”‚    â”‚
-â”‚   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â”‚
-â”‚   ConcurrentHashMap<Node, Timestamp>              â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-            â”‚                   â”‚
-    â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”    â”Œâ”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”
-    â”‚  Data Node 1 â”‚    â”‚ Data Node 2 â”‚
-    â”‚ (Port 9101)  â”‚    â”‚ (Port 9102) â”‚
-    â”‚              â”‚    â”‚             â”‚
-    â”‚ â™¥ Heartbeat  â”‚    â”‚ â™¥ Heartbeat â”‚
-    â”‚   (5s)       â”‚    â”‚   (5s)      â”‚
-    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+4. **View dashboard** — shows active nodes and file count
+5. **Click Upload File**
+6. **Select any file** and click Upload & Distribute
+7. **Check DataNode terminals** — chunk `.dat` files are created in `storage/`
+8. **Verify in DB:**
+```sql
+SELECT * FROM files;
+SELECT * FROM chunks;
+SELECT * FROM chunk_locations;
 ```
 
 ---
 
-## ðŸ”‘ Key Configuration
-
-All configuration is centralized in `DBConnection.java`:
-
-```java
-DB_URL = "jdbc:PostgreSQL://Neon via .env (JCLOUD_DB_URL)/jcloud"
-DB_USER = "root"
-DB_PASSWORD = "Jcloud@db"
+## 📊 System Architecture
 ```
+┌─────────────────────────────────────────────────────┐
+│              TOMCAT (port 8080)                      │
+│  Register  Login  Dashboard  Upload                  │
+│  Servlet   Servlet  JSP      Servlet                 │
+└──────────────────┬──────────────────────────────────┘
+                   │
+         ┌─────────▼──────────┐
+         │  DAOs              │
+         │  UserDAO NodeDAO   │
+         │  FileDAO ChunkDAO  │
+         └─────────┬──────────┘
+                   │
+         ┌─────────▼──────────┐
+         │   DBConnection     │
+         │   (Singleton)      │
+         └─────────┬──────────┘
+                   │
+         ┌─────────▼──────────┐
+         │  Neon PostgreSQL   │
+         │  (Cloud DB)        │
+         └────────────────────┘
 
-Master Node: `localhost:9000`
-Data Node 1: `localhost:9101`
-Data Node 2: `localhost:9102`
-PostgreSQL: `Neon via .env (JCLOUD_DB_URL)`
-Tomcat: `localhost:8080`
+┌────────────────────────────────────────────────────┐
+│           MASTER NODE (9000)                       │
+│   Thread Pool (50) → ClientHandler                 │
+│   HeartbeatMonitor (15s timeout)                   │
+│   ConcurrentHashMap<Node, Timestamp>               │
+└───────────┬────────────────────┬──────────────────┘
+            │                    │
+    ┌───────▼──────┐     ┌──────▼──────┐
+    │ Data Node 1  │     │ Data Node 2 │
+    │ (Port 9101)  │     │ (Port 9102) │
+    │ ♥ HB (5s)   │     │ ♥ HB (5s)  │
+    │ storage/     │     │ storage/    │
+    └──────────────┘     └─────────────┘
+```
 
 ---
 
-## ðŸ› Troubleshooting
+## 🔑 Key Configuration
+
+All DB configuration is via `.env` file in project root:
+```
+JCLOUD_DB_URL=postgresql://user:password@host/neondb?sslmode=require&channel_binding=require
+```
+
+| Component | Address |
+|-----------|---------|
+| Master Node | localhost:9000 |
+| Data Node 1 | localhost:9101 |
+| Data Node 2 | localhost:9102 |
+| PostgreSQL | Neon via .env |
+| Tomcat | localhost:8080 |
+
+---
+
+## 🛠 Troubleshooting
+
+### Issue: "Port 9000 already in use"
+```powershell
+taskkill /IM java.exe /F
+```
+Then restart master.
+
+### Issue: "No active data nodes available" on upload
+Start `run-datanode1.bat` before uploading.
 
 ### Issue: "Cannot connect to database"
-- Verify PostgreSQL is running: `No local DB service required (Neon cloud DB)`
-- Check credentials: `Use Neon SQL Editor or psql with JCLOUD_DB_URL`
-- Ensure JDBC driver is in classpath
+- Verify `.env` has correct `JCLOUD_DB_URL`
+- Run `test-database.bat` to confirm connection
 
 ### Issue: "Master Node connection refused"
 - Ensure Master Node is started first
 - Check port 9000 is not blocked by firewall
-- Verify Master console shows "STARTED"
 
 ### Issue: "Node marked as DEAD"
 - Check Data Node is running
 - Verify heartbeat messages in Master console
-- Ensure network connectivity
 
-### Issue: "Tomcat 404 error"
-- Verify WAR deployed to `webapps/jcloud`
-- Check Tomcat logs in `logs/catalina.out`
-- Ensure PostgreSQL JDBC driver in `WEB-INF/lib/`
+### Issue: "Tomcat 404 error on /upload"
+- Re-run the deploy commands from Step 4
+- Verify `UploadServlet.class` exists in `%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\servlet\`
 
----
-
-## ðŸ“ˆ Next Steps
-
-Now that core infrastructure is running, you can implement:
-
-1. **File Upload/Download** - Chunking algorithm and storage
-2. **Replication Logic** - Store chunks across multiple nodes
-3. **Load Balancing** - Distribute chunks evenly
-4. **Node Recovery** - Re-replicate chunks when node dies
-5. **Web UI** - File browser, upload/download interfaces
+### Issue: "compile.bat skips servlet compilation"
+Ensure `servlet-api.jar` exists in project root `D:\j-cloud\servlet-api.jar`
 
 ---
 
-## ðŸŽ‰ Success Indicators
+## 📈 Next Steps
+
+Now that core infrastructure and upload are working, you can implement:
+
+1. ✅ File Upload — chunking and distribution
+2. ⏳ File Download — DownloadServlet + chunk stitcher
+3. ⏳ My Files page — list and manage uploaded files
+4. ⏳ Replication Logic — store chunks on multiple nodes
+5. ⏳ Node Recovery — re-replicate when node dies
+6. ⏳ Load Balancing — distribute based on free space
+
+---
+
+## 🎉 Success Indicators
 
 When everything is working:
 
-âœ… Master Node shows heartbeat monitor running
-âœ… Both Data Nodes show "Heartbeat sent and acknowledged"
-âœ… PostgreSQL `nodes` table shows both nodes as ACTIVE
-âœ… Tomcat accessible at http://localhost:8080
-âœ… Can register and login via web interface
-âœ… Dashboard displays user information
+✅ Master Node shows heartbeat monitor running
+✅ Both Data Nodes show "Heartbeat sent and acknowledged"
+✅ PostgreSQL `nodes` table shows both nodes as ACTIVE
+✅ Tomcat accessible at `http://localhost:8080/jcloud`
+✅ Can register and login via web interface
+✅ Dashboard shows live file count and node status
+✅ Upload File page works at `http://localhost:8080/jcloud/upload`
+✅ After upload — chunk `.dat` files appear in `D:\j-cloud\storage\`
+✅ After upload — rows in `files`, `chunks`, `chunk_locations` tables
 
 ---
 
-## ðŸ’¡ Development Tips
+## 💡 Development Tips
 
 - **Use separate terminals** for each component (easier debugging)
 - **Check logs** in each terminal for errors
-- **Test incrementally** - don't start everything at once
-- **Database first** - always verify DB before starting nodes
-- **Monitor heartbeats** - key indicator of system health
+- **Always start in order** — Master → DataNodes → Tomcat → Browser
+- **Never upload before starting DataNodes** — you will get "No active nodes" error
+- **Database first** — always verify DB before starting nodes
+- **Monitor heartbeats** — key indicator of system health
+- **PowerShell tip** — the folder is literally named `%TOMCAT_HOME%`, use it directly in paths
 
 ---
 
-Built with â¤ï¸ using scalable Java patterns: Thread Pools, Connection Pooling, Scheduled Executors, and Concurrent Data Structures.
+Built with ❤️ using scalable Java patterns: Thread Pools, Connection Pooling, Scheduled Executors, Round-Robin Distribution, and Concurrent Data Structures.
