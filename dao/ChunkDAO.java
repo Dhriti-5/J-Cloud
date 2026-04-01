@@ -73,4 +73,34 @@ public class ChunkDAO {
 
         return chunks;
     }
+
+    /**
+     * Day 10 — Get a chunk by its chunk_id.
+     * 
+     * Used by ReplicationManager to fetch chunk metadata for replication decisions.
+     * 
+     * @param chunkId the primary key of the chunk
+     * @return Chunk if found, null otherwise
+     */
+    public Chunk getChunkById(int chunkId) {
+        String sql = "SELECT chunk_id, file_id, chunk_index, chunk_size FROM chunks WHERE chunk_id = ?";
+
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, chunkId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    Chunk chunk = new Chunk();
+                    chunk.setChunkId(rs.getInt("chunk_id"));
+                    chunk.setFileId(rs.getInt("file_id"));
+                    chunk.setChunkIndex(rs.getInt("chunk_index"));
+                    chunk.setChunkSize(rs.getInt("chunk_size"));
+                    return chunk;
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("✗ Error fetching chunk by ID " + chunkId + ": " + e.getMessage());
+        }
+
+        return null;
+    }
 }
