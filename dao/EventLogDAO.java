@@ -1,0 +1,132 @@
+package dao;
+
+import utils.DBConnection;
+
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Event Log DAO - Day 12
+ * Tracks system events: node failures, chunk recoveries, etc.
+ * Used by HeartbeatMonitor (failure detection) and ReplicationManager (healing)
+ */
+public class EventLogDAO {
+
+    private Connection connection;
+
+    public EventLogDAO() {
+        this.connection = DBConnection.getInstance().getConnection();
+    }
+
+    /**
+     * Log an event to the event_logs table
+     * 
+     * @param eventType e.g., 'NODE_FAILURE', 'RECOVERY_START', 'RECOVERY_SUCCESS', 'METADATA_PURGE'
+     * @param message human-readable message
+     * @return true if logged successfully
+     */
+    public boolean logEvent(String eventType, String message) {
+        String query = "INSERT INTO event_logs (event_type, message) VALUES (?, ?)";
+
+        try (PreparedStatement stmt = connection.prepareStatement(query)) {
+            stmt.setString(1, eventType);
+            stmt.setString(2, message);
+
+            int rowsAffected = stmt.executeUpdate();
+            if (rowsAffected > 0) {
+                System.out.println("✓ Event logged: [" + eventType + "] " + message);
+                return true;
+            }
+
+        } catch (SQLException e) {
+            System.err.println("✗ Error logging event: " + eventType);
+            e.printStackTrace();
+        }
+
+        return false;
+    }
+
+    /**
+     * Get recent events (latest N records)
+     * 
+     * @param limit number of events to fetch
+     * @return list of event maps with keys: event_type, message, created_at
+     */
+    public List<Map<String, String>> getRecentEvents(int limit) {
+        List<Map<String, String>> events = new ArrayList<>();
+        String query = "SELECT log_id, event_type, message, created_at FROM event_logs " +
+                      "ORDER BY created_at DESC LIMIT ?";
+
+        try (PreparedStatement stmt = connection.prepareStatement(query)) {
+            stmt.setInt(1, limit);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, String> event = new HashMap<>();
+                    event.put("log_id", String.valueOf(rs.getInt("log_id")));
+                    event.put("event_type", rs.getString("event_type"));
+                    event.put("message", rs.getString("message"));
+                    event.put("created_at", String.valueOf(rs.getTimestamp("created_at")));
+                    events.add(event);
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("✗ Error fetching recent events");
+            e.printStackTrace();
+        }
+
+        return events;
+    }
+
+    /**
+     * Get event count by type for dashboard statistics
+     * 
+     * @return map of event_type -> count
+     */
+    public Map<String, Integer> getEventStatistics() {
+        Map<String, Integer> stats = new HashMap<>();
+        String query = "SELECT event_type, COUNT(*) as count FROM event_logs GROUP BY event_type";
+
+        try (PreparedStatement stmt = connection.prepareStatement(query);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                stats.put(rs.getString("event_type"), rs.getInt("count"));
+            }
+
+        } catch (SQLException e) {
+            System.err.println("✗ Error fetching event statistics");
+            e.printStackTrace();
+        }
+
+        return stats;
+    }
+
+    /**
+     * Clear old events (older than X days) to keep table size manageable
+     * 
+     * @param daysOld delete events older than this many days
+     * @return number of rows deleted
+     */
+    public int clearOldEvents(int daysOld) {
+        String query = "DELETE FROM event_logs WHERE created_at < CURRENT_TIMESTAMP - INTERVAL '" + daysOld + " days'";
+
+        try (PreparedStatement stmt = connection.prepareStatement(query)) {
+            int rowsDeleted = stmt.executeUpdate();
+            if (rowsDeleted > 0) {
+                System.out.println("✓ Cleared " + rowsDeleted + " old events (> " + daysOld + " days)");
+            }
+            return rowsDeleted;
+
+        } catch (SQLException e) {
+            System.err.println("✗ Error clearing old events");
+            e.printStackTrace();
+        }
+
+        return 0;
+    }
+}
