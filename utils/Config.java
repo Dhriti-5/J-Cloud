@@ -1,5 +1,14 @@
 package utils;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
  * Configuration management for J-Cloud.
  *
@@ -8,62 +17,132 @@ package utils;
  *
  * Usage:
  *   - Set environment variables before starting servers/servlets
- *   - Fallback defaults are provided for development (localhost)
+ *   - Or define required values in the .env file at project root
  */
 public class Config {
 
+    private static final Map<String, String> DOTENV_VARS = loadDotEnv();
+
     // Master Node Configuration
-    public static final String MASTER_HOST = getEnv("JCLOUD_MASTER_HOST", "localhost");
-    public static final int MASTER_PORT = getEnvInt("JCLOUD_MASTER_PORT", 9000);
+    public static final String MASTER_HOST = getRequiredEnv("JCLOUD_MASTER_HOST");
+    public static final int MASTER_PORT = getRequiredEnvInt("JCLOUD_MASTER_PORT");
 
     // Data Node Configuration (per node - set via command-line args or env vars)
-    public static final String DATANODE_HOST = getEnv("JCLOUD_DATANODE_HOST", "localhost");
-    public static final String DATANODE1_HOST = getEnv("JCLOUD_DATANODE1_HOST", DATANODE_HOST);
-    public static final String DATANODE2_HOST = getEnv("JCLOUD_DATANODE2_HOST", DATANODE_HOST);
+   // public static final String DATANODE_HOST = getRequiredEnv("JCLOUD_DATANODE_HOST");
+    public static final String DATANODE1_HOST = getRequiredEnv("JCLOUD_DATANODE1_HOST");
+    public static final String DATANODE2_HOST = getRequiredEnv("JCLOUD_DATANODE2_HOST");
 
     // Node Ports
-    public static final int DATANODE1_PORT = getEnvInt("JCLOUD_DATANODE1_PORT", 9101);
-    public static final int DATANODE2_PORT = getEnvInt("JCLOUD_DATANODE2_PORT", 9102);
+    public static final int DATANODE1_PORT = getRequiredEnvInt("JCLOUD_DATANODE1_PORT");
+    public static final int DATANODE2_PORT = getRequiredEnvInt("JCLOUD_DATANODE2_PORT");
 
     /**
-     * Get environment variable as String with fallback default.
+     * Get environment variable from OS env first, then .env map.
      */
-    public static String getEnv(String key, String defaultValue) {
+    private static String lookupValue(String key) {
         String value = System.getenv(key);
         if (value != null && !value.trim().isEmpty()) {
             return value.trim();
         }
-        return defaultValue;
+
+        String dotenvValue = DOTENV_VARS.get(key);
+        if (dotenvValue != null && !dotenvValue.trim().isEmpty()) {
+            return dotenvValue.trim();
+        }
+
+        return null;
     }
 
     /**
-     * Get environment variable as Integer with fallback default.
+     * Get required environment variable as String.
      */
-    public static int getEnvInt(String key, int defaultValue) {
-        String value = System.getenv(key);
-        if (value != null && !value.trim().isEmpty()) {
-            try {
-                return Integer.parseInt(value.trim());
-            } catch (NumberFormatException e) {
-                System.err.println("⚠ Warning: " + key + " is not a valid integer, using default: " + defaultValue);
-            }
+    public static String getRequiredEnv(String key) {
+        String value = lookupValue(key);
+        if (value == null) {
+            throw new IllegalStateException("Missing required config: " + key + " (set in OS env or .env file)");
         }
-        return defaultValue;
+        return value;
     }
 
     /**
-     * Get environment variable as Long with fallback default.
+     * Get optional environment variable as String with explicit fallback.
      */
-    public static long getEnvLong(String key, long defaultValue) {
-        String value = System.getenv(key);
-        if (value != null && !value.trim().isEmpty()) {
-            try {
-                return Long.parseLong(value.trim());
-            } catch (NumberFormatException e) {
-                System.err.println("⚠ Warning: " + key + " is not a valid long, using default: " + defaultValue);
-            }
+    public static String getOptionalEnv(String key, String fallbackValue) {
+        String value = lookupValue(key);
+        if (value == null) {
+            return fallbackValue;
         }
-        return defaultValue;
+        return value;
+    }
+
+    /**
+     * Load key=value pairs from .env in the project working directory.
+     */
+    private static Map<String, String> loadDotEnv() {
+        Path envPath = Paths.get(".env");
+        if (!Files.exists(envPath)) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, String> values = new HashMap<>();
+        try {
+            List<String> lines = Files.readAllLines(envPath);
+            for (String rawLine : lines) {
+                String line = rawLine.trim();
+                if (line.isEmpty() || line.startsWith("#")) {
+                    continue;
+                }
+                int idx = line.indexOf('=');
+                if (idx <= 0) {
+                    continue;
+                }
+
+                String key = line.substring(0, idx).trim();
+                String value = line.substring(idx + 1).trim();
+
+                // Strip matching surrounding quotes if present.
+                if (value.length() >= 2) {
+                    boolean doubleQuoted = value.startsWith("\"") && value.endsWith("\"");
+                    boolean singleQuoted = value.startsWith("'") && value.endsWith("'");
+                    if (doubleQuoted || singleQuoted) {
+                        value = value.substring(1, value.length() - 1);
+                    }
+                }
+
+                values.put(key, value);
+            }
+            return values;
+        } catch (IOException e) {
+            System.err.println("Warning: Failed to read .env file: " + e.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
+    /**
+     * Get required environment variable as Integer.
+     */
+    public static int getRequiredEnvInt(String key) {
+        String value = getRequiredEnv(key);
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException("Invalid integer config for " + key + ": " + value, e);
+        }
+    }
+
+    /**
+     * Get environment variable as Long with explicit fallback.
+     */
+    public static long getOptionalEnvLong(String key, long fallbackValue) {
+        String value = lookupValue(key);
+        if (value == null) {
+            return fallbackValue;
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException("Invalid long config for " + key + ": " + value, e);
+        }
     }
 
     /**

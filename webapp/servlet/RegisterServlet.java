@@ -69,6 +69,13 @@ public class RegisterServlet extends HttpServlet {
             return;
         }
 
+        //Check if email already exists
+        if (userDAO.emailExists(email)) {
+            request.setAttribute("error", "Email already registered");
+            request.getRequestDispatcher("/register.jsp").forward(request, response);
+            return;
+        }
+
         // Hash password (simple MD5 for now, use BCrypt in production)
         String hashedPassword = hashPassword(password);
 
