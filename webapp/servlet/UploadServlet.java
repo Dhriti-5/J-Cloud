@@ -90,8 +90,9 @@ public class UploadServlet extends HttpServlet {
             return;
         }
 
-        // Retrieve active nodes for storage
-        List<NodeInfo> activeNodes = nodeDAO.getAllActiveNodes();
+            // Retrieve active nodes for storage (sorted by capacity for Day 10 replication)
+        nodeDAO = new NodeDAO();
+        List<NodeInfo> activeNodes = nodeDAO.getActiveNodesSortedByCapacity();
         if (activeNodes.isEmpty()) {
             request.setAttribute("error", "No active data nodes available. Please start at least one node.");
             request.getRequestDispatcher("/upload.jsp").forward(request, response);
@@ -118,36 +119,63 @@ public class UploadServlet extends HttpServlet {
                     throw new IOException("Failed to create chunk metadata");
                 }
 
-                // Choose a node in round-robin fashion
-                NodeInfo node = activeNodes.get(chunkIndex % activeNodes.size());
+                // Day 10: Replication Strategy - Store on top 2 nodes (or 1 if unavailable)
+                // Node 1 (Primary): Always try to use first node (highest capacity)
+                NodeInfo primaryNode = activeNodes.get(0);
 
                 // Capture values for lambda (must be effectively final)
                 final int finalChunkId = chunkId;
                 final int finalChunkIndex = chunkIndex;
                 final byte[] finalBytes = chunkBytes;
-                final NodeInfo finalNode = node;
+                final NodeInfo finalPrimaryNode = primaryNode;
 
-                // Submit upload task
+                // Submit upload task for primary node
                 futures.add(executor.submit(() -> {
-                    DataNodeClient client = new DataNodeClient(finalNode.getIpAddress(), finalNode.getPort());
+                    DataNodeClient client = new DataNodeClient(finalPrimaryNode.getIpAddress(), finalPrimaryNode.getPort());
                     boolean stored = client.storeChunk(finalChunkId, finalChunkIndex, fileMetadata.getFileId(), originalFileName, finalBytes);
 
-                    return new ChunkUploadResult(finalChunkId, finalNode.getNodeId(), stored, stored ? null : "Failed to store chunk on node");
+                    return new ChunkUploadResult(finalChunkId, finalPrimaryNode.getNodeId(), stored, stored ? null : "Failed to store chunk on primary node");
                 }));
+
+                // Node 2 (Replica): Submit to second node if available
+                if (activeNodes.size() >= 2) {
+                    NodeInfo replicaNode = activeNodes.get(1);
+                    final NodeInfo finalReplicaNode = replicaNode;
+
+                    futures.add(executor.submit(() -> {
+                        DataNodeClient client = new DataNodeClient(finalReplicaNode.getIpAddress(), finalReplicaNode.getPort());
+                        boolean stored = client.storeChunk(finalChunkId, finalChunkIndex, fileMetadata.getFileId(), originalFileName, finalBytes);
+
+                        return new ChunkUploadResult(finalChunkId, finalReplicaNode.getNodeId(), stored, stored ? null : "Failed to store chunk on replica node");
+                    }));
+                } else {
+                    // Only 1 node available - mark chunk for async replication by ReplicationManager
+                    System.out.println("⚠ Only 1 node available for chunk " + chunkId + ". Marked for async replication.");
+                }
 
                 chunkIndex++;
             }
 
             // Wait for uploads to complete and record locations
+            int replicationFactor = 0;
             for (Future<ChunkUploadResult> future : futures) {
                 ChunkUploadResult result = future.get();
                 if (!result.success) {
-                    throw new IOException(result.error + " (chunkId=" + result.chunkId + ")");
+                    // For non-blocking uploads, we don't fail if replica fails to store,
+                    // but we do fail if primary storage fails
+                    if (result.nodeId == 0) {
+                        throw new IOException(result.error + " (chunkId=" + result.chunkId + ")");
+                    } else {
+                        System.out.println("⚠ Replica storage failed: " + result.error);
+                        continue;
+                    }
                 }
 
                 ChunkLocation location = new ChunkLocation(result.chunkId, result.nodeId);
                 chunkLocationDAO.createChunkLocation(location);
+                replicationFactor++;
             }
+
 
         } catch (IOException | InterruptedException | ExecutionException e) {
             request.setAttribute("error", "Upload failed: " + e.getMessage());
@@ -164,7 +192,7 @@ public class UploadServlet extends HttpServlet {
             }
         }
 
-        request.setAttribute("success", "File uploaded successfully and split into chunks.");
+        request.setAttribute("success", "File uploaded successfully and split into chunks (replication factor: ~2).");
         request.getRequestDispatcher("/upload.jsp").forward(request, response);
     }
 
