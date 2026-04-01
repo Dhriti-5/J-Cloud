@@ -9,6 +9,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
  * Configuration management for J-Cloud.
  *
@@ -27,7 +36,8 @@ public class Config {
     public static final String MASTER_HOST = getRequiredEnv("JCLOUD_MASTER_HOST");
     public static final int MASTER_PORT = getRequiredEnvInt("JCLOUD_MASTER_PORT");
 
-    // Data Node Configuration (Strictly fetched from .env or OS)
+    // Data Node Configuration (per node - set via command-line args or env vars)
+   // public static final String DATANODE_HOST = getRequiredEnv("JCLOUD_DATANODE_HOST");
     public static final String DATANODE1_HOST = getRequiredEnv("JCLOUD_DATANODE1_HOST");
     public static final String DATANODE2_HOST = getRequiredEnv("JCLOUD_DATANODE2_HOST");
 
