@@ -1,5 +1,7 @@
 package datanode;
 
+import utils.Config;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -23,9 +25,9 @@ public class DataNodeServer {
     private final int port;
     private final long storageCapacity;
     
-    // Master Node connection details
-    private static final String MASTER_HOST = "localhost";
-    private static final int MASTER_PORT = 9000;
+    // Master Node connection details (from Config, which reads from environment)
+    private static final String MASTER_HOST = Config.MASTER_HOST;
+    private static final int MASTER_PORT = Config.MASTER_PORT;
     
     // Heartbeat configuration
     private static final int HEARTBEAT_INTERVAL_SECONDS = 5;
@@ -242,6 +244,9 @@ public class DataNodeServer {
                     case "GET_CHUNK":
                         handleGetChunk(parts, out);
                         break;
+                    case "DELETE_CHUNK":
+                        handleDeleteChunk(parts, out);
+                        break;
                     default:
                         out.writeUTF("ERROR|Unknown command");
                         break;
@@ -304,6 +309,41 @@ public class DataNodeServer {
             out.writeUTF("OK|" + data.length);
             out.write(data);
         }
+
+        private void handleDeleteChunk(String[] parts, DataOutputStream out) throws IOException {
+            if (parts.length < 2) {
+                out.writeUTF("ERROR|Invalid DELETE_CHUNK format");
+                return;
+            }
+
+            int chunkId;
+            try {
+                chunkId = Integer.parseInt(parts[1]);
+            } catch (NumberFormatException e) {
+                out.writeUTF("ERROR|Invalid chunkId");
+                return;
+            }
+
+            File[] matches = new File(STORAGE_DIR).listFiles((dir, name) -> name.contains("_" + chunkId + "."));
+
+            if (matches == null || matches.length == 0) {
+                out.writeUTF("OK|NOT_FOUND");
+                return;
+            }
+
+            int deletedCount = 0;
+            for (File file : matches) {
+                if (file.delete()) {
+                    deletedCount++;
+                }
+            }
+
+            if (deletedCount > 0) {
+                out.writeUTF("OK|DELETED|" + deletedCount);
+            } else {
+                out.writeUTF("ERROR|Delete failed");
+            }
+        }
     }
 
     /**
@@ -364,8 +404,9 @@ public class DataNodeServer {
             capacity = Long.parseLong(args[2]);
         }
 
-        DataNodeServer dataNode = new DataNodeServer(nodeName, "localhost", port, capacity);
-        
+        // Use config for this node's bind address (set via JCLOUD_DATANODE_HOST env var)
+        String myHost = (nodeName.equals("DataNode1")) ? Config.DATANODE1_HOST : Config.DATANODE2_HOST;
+        DataNodeServer dataNode = new DataNodeServer(nodeName, myHost, port, capacity);
         // Add shutdown hook for graceful termination
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             dataNode.shutdown();

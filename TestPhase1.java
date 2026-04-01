@@ -1,4 +1,5 @@
 import utils.DBConnection;
+import utils.Config;
 import dao.UserDAO;
 import dao.NodeDAO;
 import shared.User;
@@ -65,8 +66,8 @@ public class TestPhase1 {
         System.out.println("----------------------------");
         NodeDAO nodeDAO = new NodeDAO();
         
-        NodeInfo node1 = new NodeInfo("DataNode1", "localhost", 9101, 10737418240L);
-        NodeInfo node2 = new NodeInfo("DataNode2", "localhost", 9102, 10737418240L);
+        NodeInfo node1 = new NodeInfo("DataNode1", Config.DATANODE1_HOST, Config.DATANODE1_PORT, 10737418240L);
+        NodeInfo node2 = new NodeInfo("DataNode2", Config.DATANODE2_HOST, Config.DATANODE2_PORT, 10737418240L);
         
         nodeDAO.registerNode(node1);
         nodeDAO.registerNode(node2);

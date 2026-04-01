@@ -99,4 +99,34 @@ public class FileDAO {
 
         return null;
     }
+
+    /**
+     * Delete a file metadata record by ID.
+     *
+     * If ON DELETE CASCADE is configured in the schema, related rows in
+     * chunks and chunk_locations will be deleted automatically.
+     */
+    public boolean deleteFile(int fileId) {
+        String deleteChunkLocationsSql =
+            "DELETE FROM chunk_locations WHERE chunk_id IN (SELECT chunk_id FROM chunks WHERE file_id = ?)";
+        String deleteChunksSql = "DELETE FROM chunks WHERE file_id = ?";
+        String deleteFileSql = "DELETE FROM files WHERE file_id = ?";
+
+        try (PreparedStatement deleteChunkLocations = connection.prepareStatement(deleteChunkLocationsSql);
+             PreparedStatement deleteChunks = connection.prepareStatement(deleteChunksSql);
+             PreparedStatement deleteFile = connection.prepareStatement(deleteFileSql)) {
+
+            deleteChunkLocations.setInt(1, fileId);
+            deleteChunkLocations.executeUpdate();
+
+            deleteChunks.setInt(1, fileId);
+            deleteChunks.executeUpdate();
+
+            deleteFile.setInt(1, fileId);
+            return deleteFile.executeUpdate() > 0;
+        } catch (SQLException e) {
+            System.err.println("✗ Error deleting file metadata for fileId=" + fileId + ": " + e.getMessage());
+            return false;
+        }
+    }
 }
