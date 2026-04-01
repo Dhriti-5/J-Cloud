@@ -1,6 +1,9 @@
 package master;
 
+import utils.Config;
+
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.*;
@@ -18,6 +21,7 @@ public class MasterServer {
 
     private static final int PORT = 9000;
     private static final int THREAD_POOL_SIZE = 50;
+    private static final int BACKGROUND_TASK_POOL_SIZE = 100;
     
     // Thread-safe map to track last heartbeat from each node
     // Key: nodeName, Value: timestamp in milliseconds
@@ -26,11 +30,16 @@ public class MasterServer {
     // Thread-safe map to store node IDs
     // Key: nodeName, Value: nodeId
     public static final ConcurrentHashMap<String, Integer> nodeIdMap = new ConcurrentHashMap<>();
+    private static final ExecutorService backgroundTaskPool = Executors.newFixedThreadPool(BACKGROUND_TASK_POOL_SIZE);
     
     private ExecutorService clientHandlerPool;
     private ScheduledExecutorService heartbeatMonitorService;
     private ServerSocket serverSocket;
     private volatile boolean running = true;
+
+    public static void submitBackgroundTask(Runnable task) {
+        backgroundTaskPool.execute(task);
+    }
 
     public MasterServer() {
         // Fixed thread pool prevents memory exhaustion under heavy load
@@ -45,7 +54,9 @@ public class MasterServer {
      */
     public void start() {
         try {
-            serverSocket = new ServerSocket(PORT);
+            InetAddress bindAddr = InetAddress.getByName(Config.MASTER_HOST);
+            serverSocket = new ServerSocket(PORT, 50, bindAddr);
+
             System.out.println("╔════════════════════════════════════════════╗");
             System.out.println("║   J-CLOUD MASTER NODE STARTED              ║");
             System.out.println("║   Port: " + PORT + "                              ║");
@@ -114,6 +125,7 @@ public class MasterServer {
         // Shutdown thread pools gracefully
         clientHandlerPool.shutdown();
         heartbeatMonitorService.shutdown();
+        backgroundTaskPool.shutdown();
         
         try {
             if (!clientHandlerPool.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -122,9 +134,13 @@ public class MasterServer {
             if (!heartbeatMonitorService.awaitTermination(5, TimeUnit.SECONDS)) {
                 heartbeatMonitorService.shutdownNow();
             }
+            if (!backgroundTaskPool.awaitTermination(5, TimeUnit.SECONDS)) {
+                backgroundTaskPool.shutdownNow();
+            }
         } catch (InterruptedException e) {
             clientHandlerPool.shutdownNow();
             heartbeatMonitorService.shutdownNow();
+            backgroundTaskPool.shutdownNow();
         }
 
         System.out.println("✓ Master Server stopped");

@@ -178,6 +178,36 @@
         }
         .download-btn:hover { opacity: 0.88; transform: translateY(-1px); }
 
+        .delete-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #ffe8e8;
+            color: #b03030;
+            border: 1px solid #f3b4b4;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+            margin-left: 8px;
+            transition: background 0.2s;
+        }
+        .delete-btn:hover { background: #ffdcdc; }
+
+        .action-group {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .inline-form {
+            display: inline;
+            margin: 0;
+        }
+
         /* Empty state */
         .empty-state {
             text-align: center;
@@ -285,10 +315,19 @@
                         </span>
                     </td>
                     <td>
-                        <a href="<%= request.getContextPath() %>/download?file_id=<%= file.getFileId() %>"
-                           class="download-btn">
-                            &#128229; Download
-                        </a>
+                        <div class="action-group">
+                            <a href="<%= request.getContextPath() %>/download?file_id=<%= file.getFileId() %>"
+                               class="download-btn">
+                                &#128229; Download
+                            </a>
+                            <form method="post"
+                                  action="<%= request.getContextPath() %>/delete"
+                                  class="inline-form"
+                                  onsubmit="return confirm('Delete this file? The file will disappear immediately while chunk cleanup runs in background.');">
+                                <input type="hidden" name="file_id" value="<%= file.getFileId() %>">
+                                <button type="submit" class="delete-btn">&#128465;&#65039; Delete</button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 <% } %>
