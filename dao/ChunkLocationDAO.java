@@ -171,6 +171,73 @@ public class ChunkLocationDAO {
         return results;
     }
 
+    /**
+     * Day 12 — Get system health statistics
+     * 
+     * Returns counts for dashboard display:
+     * - healthy_chunks: chunks with RF >= 2
+     * - under_replicated_chunks: chunks with RF < 2
+     * 
+     * @return map with keys: healthy_chunks, under_replicated_chunks
+     */
+    public java.util.Map<String, Integer> getSystemHealth() {
+        java.util.Map<String, Integer> health = new java.util.HashMap<>();
+        
+        String sql = "SELECT " +
+                     "COUNT(DISTINCT CASE WHEN rep_count >= 2 THEN chunk_id END) as healthy, " +
+                     "COUNT(DISTINCT CASE WHEN rep_count < 2 THEN chunk_id END) as under_replicated " +
+                     "FROM ( " +
+                     "    SELECT chunk_id, COUNT(DISTINCT node_id) as rep_count " +
+                     "    FROM chunk_locations " +
+                     "    GROUP BY chunk_id " +
+                     ") replica_counts";
+
+        try (PreparedStatement stmt = connection.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            
+            if (rs.next()) {
+                health.put("healthy_chunks", rs.getInt("healthy"));
+                health.put("under_replicated_chunks", rs.getInt("under_replicated"));
+            }
+        } catch (SQLException e) {
+            System.err.println("✗ Error fetching system health: " + e.getMessage());
+            health.put("healthy_chunks", 0);
+            health.put("under_replicated_chunks", 0);
+        }
+
+        return health;
+    }
+
+    /**
+     * Day 12 — Delete all chunk_location mappings for a dead node (METADATA PURGE)
+     * 
+     * This is the critical trigger that wakes up ReplicationManager.
+     * When a node dies, its chunk_locations rows are deleted, making chunks
+     * appear under-replicated in the database. ReplicationManager then heals them.
+     * 
+     * @param nodeId the dead node
+     * @return number of mappings deleted
+     */
+    public int deleteChunkLocationsByNodeId(int nodeId) {
+        String sql = "DELETE FROM chunk_locations WHERE node_id = ?";
+
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, nodeId);
+            int rowsDeleted = stmt.executeUpdate();
+            
+            if (rowsDeleted > 0) {
+                System.out.println("✓ Purged " + rowsDeleted + " chunk_location mappings for node_id=" + nodeId);
+            }
+            return rowsDeleted;
+
+        } catch (SQLException e) {
+            System.err.println("✗ Error deleting chunk locations for node_id=" + nodeId);
+            e.printStackTrace();
+        }
+
+        return 0;
+    }
+
     public static class ChunkPhysicalLocation {
         private final int chunkId;
         private final int nodeId;

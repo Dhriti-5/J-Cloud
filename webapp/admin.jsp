@@ -1,5 +1,5 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
-<%@ page import="shared.User, shared.NodeInfo, java.util.List" %>
+<%@ page import="shared.User, shared.NodeInfo, java.util.List, java.util.Map" %>
 <%
     User user = (User) session.getAttribute("user");
     if (user == null) {
@@ -7,16 +7,27 @@
         return;
     }
 
+    // Day 11: Node Status
     List<NodeInfo> allNodes = (List<NodeInfo>) request.getAttribute("allNodes");
     Integer totalNodes = (Integer) request.getAttribute("totalNodes");
     Integer aliveNodes = (Integer) request.getAttribute("aliveNodes");
     Integer deadNodes = (Integer) request.getAttribute("deadNodes");
     Long totalCapacity = (Long) request.getAttribute("totalCapacity");
 
+    // Day 12: Event Logs & System Health
+    List<Map<String, String>> recentEvents = (List<Map<String, String>>) request.getAttribute("recentEvents");
+    Integer healthyChunks = (Integer) request.getAttribute("healthyChunks");
+    Integer underReplicatedChunks = (Integer) request.getAttribute("underReplicatedChunks");
+    Integer totalChunks = (Integer) request.getAttribute("totalChunks");
+
     if (totalNodes == null) totalNodes = 0;
     if (aliveNodes == null) aliveNodes = 0;
     if (deadNodes == null) deadNodes = 0;
     if (totalCapacity == null) totalCapacity = 0L;
+    if (recentEvents == null) recentEvents = new java.util.ArrayList<>();
+    if (healthyChunks == null) healthyChunks = 0;
+    if (underReplicatedChunks == null) underReplicatedChunks = 0;
+    if (totalChunks == null) totalChunks = 0;
 
     // Format storage capacity
     String capacityStr;
@@ -27,6 +38,9 @@
     } else {
         capacityStr = totalCapacity + " B";
     }
+    
+    // Calculate recovery progress percentage
+    int recoveryPercent = totalChunks > 0 ? (healthyChunks * 100) / totalChunks : 100;
 %>
 <!DOCTYPE html>
 <html lang="en">
@@ -238,6 +252,11 @@
             color: #721c24;
             border-left: 4px solid #dc3545;
         }
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+        }
         @media (max-width: 768px) {
             .stats-grid {
                 grid-template-columns: 1fr;
@@ -312,6 +331,35 @@
             </div>
         </div>
 
+        <!-- Day 12: System Health Stats -->
+        <div class="stats-grid" style="margin-top: 20px;">
+            <div class="stat-card success">
+                <h3>Healthy Chunks</h3>
+                <div class="stat-value"><%= healthyChunks %></div>
+                <p style="color: #51cf66; font-size: 12px; margin-top: 8px;">RF ≥ 2</p>
+            </div>
+            <% if (underReplicatedChunks > 0) { %>
+                <div class="stat-card critical">
+                    <h3>Under-Replicated</h3>
+                    <div class="stat-value"><%= underReplicatedChunks %></div>
+                    <p style="color: #ff6b6b; font-size: 12px; margin-top: 8px;">🔄 Repairing...</p>
+                </div>
+            <% } else { %>
+                <div class="stat-card success">
+                    <h3>Under-Replicated</h3>
+                    <div class="stat-value">0</div>
+                    <p style="color: #51cf66; font-size: 12px; margin-top: 8px;">All healthy</p>
+                </div>
+            <% } %>
+            <div class="stat-card">
+                <h3>Recovery Progress</h3>
+                <div class="stat-value" style="font-size: 24px;"><%= recoveryPercent %>%</div>
+                <div style="background: #e0e0e0; height: 6px; border-radius: 3px; margin-top: 8px;">
+                    <div style="background: linear-gradient(90deg, #51cf66, #40c057); width: <%= recoveryPercent %>%; height: 100%; border-radius: 3px;"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Nodes Table Section -->
         <div class="nodes-section">
             <h3 class="section-title">📡 Cluster Nodes</h3>
@@ -375,16 +423,86 @@
             <% } %>
         </div>
 
+        <!-- Day 12: Event Log Section -->
+        <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-top: 40px;">
+            <h3 class="section-title">📋 Live Event Feed (Day 12)</h3>
+            <p style="color: #666; font-size: 13px; margin-bottom: 20px;">System recovery and replication events in real-time</p>
+            
+            <% if (recentEvents != null && !recentEvents.isEmpty()) { %>
+                <div style="max-height: 400px; overflow-y: auto;">
+                    <% for (Map<String, String> event : recentEvents) {
+                        String eventType = event.getOrDefault("event_type", "UNKNOWN");
+                        String message = event.getOrDefault("message", "");
+                        String createdAt = event.getOrDefault("created_at", "");
+                        
+                        // Determine alert style based on event type
+                        String alertClass = "warning";
+                        String icon = "ℹ️";
+                        if (eventType.contains("FAILURE")) {
+                            alertClass = "danger";
+                            icon = "❌";
+                        } else if (eventType.contains("SUCCESS")) {
+                            alertClass = "success";
+                            icon = "✅";
+                        } else if (eventType.contains("RECOVERY")) {
+                            alertClass = "success";
+                            icon = "🔄";
+                        } else if (eventType.contains("PURGE")) {
+                            alertClass = "warning";
+                            icon = "🧹";
+                        }
+                    %>
+                        <div style="display: flex; gap: 10px; padding: 12px; margin-bottom: 10px; background: <%= 
+                            "danger".equals(alertClass) ? "#ffe7e7" : 
+                            "success".equals(alertClass) ? "#e7f5f0" : 
+                            "#fff3cd" %>; border-left: 4px solid <%= 
+                            "danger".equals(alertClass) ? "#dc3545" : 
+                            "success".equals(alertClass) ? "#27ae60" : 
+                            "#ffc107" %>; border-radius: 5px;">
+                            <span style="font-size: 18px;"><%= icon %></span>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; font-size: 13px; color: #333;">
+                                    <span style="background: <%= 
+                                        "danger".equals(alertClass) ? "#ffe0e0" : 
+                                        "success".equals(alertClass) ? "#e0f7f0" : 
+                                        "#fff0d9" %>; padding: 2px 8px; border-radius: 3px;">
+                                        <%= eventType %>
+                                    </span>
+                                </div>
+                                <div style="color: #666; font-size: 12px; margin-top: 4px;"><%= message %></div>
+                                <div style="color: #999; font-size: 11px; margin-top: 4px;">
+                                    <% 
+                                        // Try to format timestamp nicely
+                                        try {
+                                            if (createdAt != null && createdAt.length() > 19) {
+                                                createdAt = createdAt.substring(0, 19);
+                                            }
+                                        } catch (Exception e) {}
+                                    %>
+                                    <%= createdAt %>
+                                </div>
+                            </div>
+                        </div>
+                    <% } %>
+                </div>
+            <% } else { %>
+                <div class="empty-state">
+                    <div style="color: #999; font-size: 13px;">No events recorded yet. System events will appear here when nodes fail or recover.</div>
+                </div>
+            <% } %>
+        </div>
+
         <!-- Instructions -->
         <div style="margin-top: 40px; padding: 20px; background: #f9f9f9; border-radius: 8px;">
-            <h4 style="color: #333; margin-bottom: 10px;">💡 How It Works</h4>
+            <h4 style="color: #333; margin-bottom: 10px;">💡 How Day 11 & 12 Work Together</h4>
             <ul style="color: #666; line-height: 1.8; margin-left: 20px;">
-                <li><strong>Heartbeat Detection:</strong> Master node checks heartbeats every 10 seconds</li>
-                <li><strong>Node Timeout:</strong> Nodes not responding for 15+ seconds marked as DEAD</li>
-                <li><strong>Database Sync:</strong> Node status automatically updates in PostgreSQL</li>
-                <li><strong>Recovery Trigger:</strong> Dead nodes trigger recovery process (Day 12)</li>
-                <li><strong>Green 🟢:</strong> Node is healthy and responding</li>
-                <li><strong>Red 🔴:</strong> Node is dead or unreachable</li>
+                <li><strong>Day 11 - Failure Detection:</strong> HeartbeatMonitor detects dead nodes (>15s timeout)</li>
+                <li><strong>Day 12 - Metadata Purge:</strong> Deletes chunk_locations for dead node → triggers healing</li>
+                <li><strong>Day 10 - Automatic Healing:</strong> ReplicationManager finds under-replicated chunks & copies them</li>
+                <li><strong>Event Logging:</strong> Every failure & recovery logged to event_logs table (visible above)</li>
+                <li><strong>Green 🟢:</strong> Node is healthy and ACTIVE</li>
+                <li><strong>Red 🔴:</strong> Node is DEAD (will auto-recover below)</li>
+                <li><strong>Recovery Progress:</strong> Shows healing percentage (chunks with RF ≥ 2)</li>
             </ul>
         </div>
     </div>
