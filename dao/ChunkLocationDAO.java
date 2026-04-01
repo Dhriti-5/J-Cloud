@@ -73,4 +73,69 @@ public class ChunkLocationDAO {
 
         return locations;
     }
+
+    /**
+     * Get all physical chunk locations for a file in one query.
+     *
+     * Used by Master during DELETE_REQUEST to fan out DELETE_CHUNK commands
+     * without doing N+1 database lookups.
+     */
+    public List<ChunkPhysicalLocation> getChunkLocationsByFileId(int fileId) {
+        String sql = "SELECT c.chunk_id, n.node_id, n.ip_address, n.port " +
+                     "FROM chunks c " +
+                     "JOIN chunk_locations cl ON c.chunk_id = cl.chunk_id " +
+                     "JOIN nodes n ON cl.node_id = n.node_id " +
+                     "WHERE c.file_id = ?";
+
+        List<ChunkPhysicalLocation> locations = new ArrayList<>();
+
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, fileId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    locations.add(new ChunkPhysicalLocation(
+                        rs.getInt("chunk_id"),
+                        rs.getInt("node_id"),
+                        rs.getString("ip_address"),
+                        rs.getInt("port")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("✗ Error fetching chunk physical locations for fileId=" + fileId + ": " + e.getMessage());
+        }
+
+        return locations;
+    }
+
+    public static class ChunkPhysicalLocation {
+        private final int chunkId;
+        private final int nodeId;
+        private final String ipAddress;
+        private final int port;
+
+        public ChunkPhysicalLocation(int chunkId, int nodeId, String ipAddress, int port) {
+            this.chunkId = chunkId;
+            this.nodeId = nodeId;
+            this.ipAddress = ipAddress;
+            this.port = port;
+        }
+
+        public int getChunkId() {
+            return chunkId;
+        }
+
+        public int getNodeId() {
+            return nodeId;
+        }
+
+        public String getIpAddress() {
+            return ipAddress;
+        }
+
+        public int getPort() {
+            return port;
+        }
+    }
 }
