@@ -1,6 +1,6 @@
 ﻿# J-Cloud - Setup & Deployment Guide
 
-## 🎯 What We Built - All 5 Phases Complete!
+## 🎯 What We Built - All 8 Days Complete!
 
 ### ✅ Phase 1: Database & Shared Layer
 - **DBConnection.java** - Thread-safe Singleton for PostgreSQL connections
@@ -37,6 +37,14 @@
 - **dashboard.jsp** - Updated with live file count, storage used, active node list
 - Round-robin chunk distribution using Java ExecutorService
 
+### ✅ Phase 6: File Download System (Day 8)
+- **DownloadServlet.java** - Retrieves all chunks for a file in correct order, connects to each DataNode via TCP socket, and streams bytes sequentially into the HTTP response for a seamless browser download
+- **ChunkLocationDAO.java** - Updated with method to look up which node holds each chunk
+- **NodeDAO.java** - Updated with method to resolve a node ID into IP address and port
+- **files.jsp** - My Files page listing all uploaded files with size, chunk count, and per-file download button
+- **dashboard.jsp** - Download File and My Files buttons now active; Recent Files table with inline download links added directly on dashboard
+- Fault-tolerant download — if a node is DEAD, next available replica is tried automatically
+
 ---
 
 ## 📋 Prerequisites
@@ -45,7 +53,7 @@ Before you start, ensure you have:
 
 1. **Java JDK 8+** - [Download here](https://www.oracle.com/java/technologies/downloads/)
 2. **Neon PostgreSQL** - Cloud database configured via `.env` file
-3. **Apache Tomcat 9.0+** - Already available inside `%TOMCAT_HOME%` folder in the repo
+3. **Apache Tomcat 9.0+** - Available inside `%TOMCAT_HOME%` folder in the repo, and installed at `C:\Program Files\Apache Software Foundation\Tomcat 9.0`
 4. **PostgreSQL JDBC Driver** - `webapp\WEB-INF\lib\postgresql-42.7.10.jar`
 5. **servlet-api.jar** - In project root `D:\j-cloud\servlet-api.jar`
 
@@ -89,7 +97,8 @@ J-Cloud/
 │   │   ├── LoginServlet.java
 │   │   ├── LogoutServlet.java
 │   │   ├── RegisterServlet.java
-│   │   └── UploadServlet.java
+│   │   ├── UploadServlet.java
+│   │   └── DownloadServlet.java   ← New Day 8
 │   ├── WEB-INF/
 │   │   ├── web.xml
 │   │   └── lib/
@@ -97,9 +106,10 @@ J-Cloud/
 │   ├── index.jsp
 │   ├── login.jsp
 │   ├── register.jsp
-│   ├── dashboard.jsp
-│   └── upload.jsp
-├── %TOMCAT_HOME%/       # Tomcat — deployment goes here
+│   ├── dashboard.jsp              ← Updated Day 8
+│   ├── upload.jsp
+│   └── files.jsp                  ← New Day 8
+├── %TOMCAT_HOME%/       # Tomcat — deployment goes here (Option A)
 │   └── webapps/
 │       └── jcloud/
 │           ├── WEB-INF/
@@ -115,7 +125,17 @@ J-Cloud/
 │           ├── login.jsp
 │           ├── register.jsp
 │           ├── dashboard.jsp
-│           └── upload.jsp
+│           ├── upload.jsp
+│           └── files.jsp
+├── jcloud/              # Alternative deployment folder (Option B)
+│   └── webapps/
+│       └── jcloud/
+│           ├── WEB-INF/
+│           │   ├── classes/
+│           │   └── lib/
+│           ├── dashboard.jsp
+│           ├── upload.jsp
+│           └── files.jsp
 ├── database/
 │   └── schema_postgres.sql
 ├── bin/                 # Compiled classes
@@ -129,32 +149,104 @@ J-Cloud/
 
 Run `compile.bat` from `D:\j-cloud`:
 ```powershell
+cd D:\j-cloud
 compile.bat
 ```
 
 `compile.bat` automatically:
 - Finds the PostgreSQL JDBC driver
 - Finds `servlet-api.jar` from project root or Tomcat
-- Compiles shared, utils, dao, master, datanode, and servlet classes
+- Compiles shared, utils, dao, master, datanode, and servlet classes (including `DownloadServlet.java`)
 - Outputs compiled `.class` files to `bin\`
 
 ---
 
-## 🚀 Step 4: Deploy to `%TOMCAT_HOME%`
+## 🚀 Step 4: Deploy to Tomcat
 
-Copy compiled classes and JSPs into the `%TOMCAT_HOME%` folder that already exists in the repo:
+Three deploy paths are available — use whichever applies to your setup. All three end with the same result.
+
+---
+
+### ✅ Option A — Deploy via `%TOMCAT_HOME%` folder in the repo
+
 ```powershell
-Copy-Item -Recurse -Force bin\shared\*   "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\shared\"
-Copy-Item -Recurse -Force bin\utils\*    "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\utils\"
-Copy-Item -Recurse -Force bin\dao\*      "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\dao\"
-Copy-Item -Recurse -Force bin\servlet\*  "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\servlet\"
-Copy-Item -Force "webapp\WEB-INF\lib\postgresql-42.7.10.jar" "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\lib\"
-Copy-Item -Force "webapp\WEB-INF\web.xml"                    "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\web.xml"
-Copy-Item -Force webapp\index.jsp     "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\index.jsp"
-Copy-Item -Force webapp\login.jsp     "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\login.jsp"
-Copy-Item -Force webapp\register.jsp  "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\register.jsp"
-Copy-Item -Force webapp\dashboard.jsp "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\dashboard.jsp"
-Copy-Item -Force webapp\upload.jsp    "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\upload.jsp"
+# Copy compiled classes
+Copy-Item -Recurse -Force "D:\j-cloud\bin\shared\*"  "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\shared\"
+Copy-Item -Recurse -Force "D:\j-cloud\bin\utils\*"   "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\utils\"
+Copy-Item -Recurse -Force "D:\j-cloud\bin\dao\*"     "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\dao\"
+Copy-Item -Recurse -Force "D:\j-cloud\bin\servlet\*" "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\servlet\"
+
+# Copy JDBC driver and web.xml
+Copy-Item -Force "D:\j-cloud\webapp\WEB-INF\lib\postgresql-42.7.10.jar" "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\lib\"
+Copy-Item -Force "D:\j-cloud\webapp\WEB-INF\web.xml"                    "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\web.xml"
+
+# Copy all JSP files (including new files.jsp from Day 8)
+Copy-Item -Force "D:\j-cloud\webapp\index.jsp"     "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\index.jsp"
+Copy-Item -Force "D:\j-cloud\webapp\login.jsp"     "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\login.jsp"
+Copy-Item -Force "D:\j-cloud\webapp\register.jsp"  "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\register.jsp"
+Copy-Item -Force "D:\j-cloud\webapp\dashboard.jsp" "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\dashboard.jsp"
+Copy-Item -Force "D:\j-cloud\webapp\upload.jsp"    "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\upload.jsp"
+Copy-Item -Force "D:\j-cloud\webapp\files.jsp"     "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\files.jsp"
+
+# Push %TOMCAT_HOME% jcloud folder into actual Tomcat installation
+Copy-Item -Recurse -Force "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud" "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\"
+```
+
+---
+
+### ✅ Option B — Deploy via `jcloud` folder in the repo
+
+```powershell
+# Copy compiled classes
+Copy-Item -Recurse -Force "D:\j-cloud\bin\shared\*"  "D:\j-cloud\jcloud\WEB-INF\classes\shared\"
+Copy-Item -Recurse -Force "D:\j-cloud\bin\utils\*"   "D:\j-cloud\jcloud\WEB-INF\classes\utils\"
+Copy-Item -Recurse -Force "D:\j-cloud\bin\dao\*"     "D:\j-cloud\jcloud\WEB-INF\classes\dao\"
+Copy-Item -Recurse -Force "D:\j-cloud\bin\servlet\*" "D:\j-cloud\jcloud\WEB-INF\classes\servlet\"
+
+# Copy all JSP files (including new files.jsp from Day 8)
+Copy-Item -Force "D:\j-cloud\webapp\index.jsp"     "D:\j-cloud\jcloud\index.jsp"
+Copy-Item -Force "D:\j-cloud\webapp\login.jsp"     "D:\j-cloud\jcloud\login.jsp"
+Copy-Item -Force "D:\j-cloud\webapp\register.jsp"  "D:\j-cloud\jcloud\register.jsp"
+Copy-Item -Force "D:\j-cloud\webapp\dashboard.jsp" "D:\j-cloud\jcloud\dashboard.jsp"
+Copy-Item -Force "D:\j-cloud\webapp\upload.jsp"    "D:\j-cloud\jcloud\upload.jsp"
+Copy-Item -Force "D:\j-cloud\webapp\files.jsp"     "D:\j-cloud\jcloud\files.jsp"
+
+# Push jcloud folder into actual Tomcat installation
+Copy-Item -Recurse -Force "D:\j-cloud\jcloud" "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\"
+```
+
+---
+
+### ✅ Option C — Deploy directly to Tomcat installation
+
+```powershell
+# Copy compiled classes directly to Tomcat
+Copy-Item -Recurse -Force "D:\j-cloud\bin\shared\*"  "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\classes\shared\"
+Copy-Item -Recurse -Force "D:\j-cloud\bin\utils\*"   "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\classes\utils\"
+Copy-Item -Recurse -Force "D:\j-cloud\bin\dao\*"     "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\classes\dao\"
+Copy-Item -Recurse -Force "D:\j-cloud\bin\servlet\*" "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\classes\servlet\"
+
+# Copy JDBC driver and web.xml directly to Tomcat
+Copy-Item -Force "D:\j-cloud\webapp\WEB-INF\lib\postgresql-42.7.10.jar" "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\lib\"
+Copy-Item -Force "D:\j-cloud\webapp\WEB-INF\web.xml"                    "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\web.xml"
+
+# Copy all JSP files directly to Tomcat (including new files.jsp from Day 8)
+Copy-Item -Force "D:\j-cloud\webapp\index.jsp"     "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\index.jsp"
+Copy-Item -Force "D:\j-cloud\webapp\login.jsp"     "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\login.jsp"
+Copy-Item -Force "D:\j-cloud\webapp\register.jsp"  "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\register.jsp"
+Copy-Item -Force "D:\j-cloud\webapp\dashboard.jsp" "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\dashboard.jsp"
+Copy-Item -Force "D:\j-cloud\webapp\upload.jsp"    "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\upload.jsp"
+Copy-Item -Force "D:\j-cloud\webapp\files.jsp"     "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\files.jsp"
+```
+
+---
+
+### Restart Tomcat after any deploy (required for DownloadServlet to load)
+
+```powershell
+& "C:\Program Files\Apache Software Foundation\Tomcat 9.0\bin\shutdown.bat"
+Start-Sleep -Seconds 4
+& "C:\Program Files\Apache Software Foundation\Tomcat 9.0\bin\startup.bat"
 ```
 
 ---
@@ -228,7 +320,7 @@ SELECT * FROM nodes;
 - Master should mark it as DEAD
 - Check: `SELECT * FROM nodes;`
 
-### Test 3: Test Web Application
+### Test 3: Test Web Application — Upload
 
 1. **Access the app:** `http://localhost:8080/jcloud`
 2. **Register a new user**
@@ -244,20 +336,29 @@ SELECT * FROM chunks;
 SELECT * FROM chunk_locations;
 ```
 
+### Test 4: Test Web Application — Download (Day 8)
+
+1. From Dashboard, click **Download File** or **My Files**
+2. The **My Files** page (`/files.jsp`) opens — lists all your uploaded files
+3. Click the **Download** button next to any file
+4. Browser triggers a file download
+5. Open the downloaded file — verify it is not corrupted and matches the original
+
 ---
 
 ## 📊 System Architecture
 ```
 ┌─────────────────────────────────────────────────────┐
 │              TOMCAT (port 8080)                      │
-│  Register  Login  Dashboard  Upload                  │
-│  Servlet   Servlet  JSP      Servlet                 │
+│  Register  Login  Dashboard  Upload   Download       │
+│  Servlet   Servlet  JSP      Servlet  Servlet        │
 └──────────────────┬──────────────────────────────────┘
                    │
          ┌─────────▼──────────┐
          │  DAOs              │
          │  UserDAO NodeDAO   │
          │  FileDAO ChunkDAO  │
+         │  ChunkLocationDAO  │
          └─────────┬──────────┘
                    │
          ┌─────────▼──────────┐
@@ -329,7 +430,19 @@ Start `run-datanode1.bat` before uploading.
 
 ### Issue: "Tomcat 404 error on /upload"
 - Re-run the deploy commands from Step 4
-- Verify `UploadServlet.class` exists in `%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\servlet\`
+- Verify `UploadServlet.class` exists in `C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\classes\servlet\`
+
+### Issue: "Tomcat 404 error on /download"
+- Verify `DownloadServlet.class` exists in `C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\classes\servlet\`
+- Restart Tomcat — new servlet classes require a restart to register
+
+### Issue: "Download starts but file is corrupted or empty"
+- Ensure DataNode(s) are running — chunk bytes cannot be fetched if nodes are DEAD
+- Confirm rows exist in `chunk_locations` table for the file
+
+### Issue: "files.jsp shows 404"
+- Ensure `files.jsp` was copied into the deployment folder and into Tomcat webapps
+- Re-run the deploy commands from Step 4
 
 ### Issue: "compile.bat skips servlet compilation"
 Ensure `servlet-api.jar` exists in project root `D:\j-cloud\servlet-api.jar`
@@ -338,11 +451,11 @@ Ensure `servlet-api.jar` exists in project root `D:\j-cloud\servlet-api.jar`
 
 ## 📈 Next Steps
 
-Now that core infrastructure and upload are working, you can implement:
+Now that upload and download are both working, you can implement:
 
 1. ✅ File Upload — chunking and distribution
-2. ⏳ File Download — DownloadServlet + chunk stitcher
-3. ⏳ My Files page — list and manage uploaded files
+2. ✅ File Download — chunk stitching and streaming
+3. ✅ My Files page — list and download uploaded files
 4. ⏳ Replication Logic — store chunks on multiple nodes
 5. ⏳ Node Recovery — re-replicate when node dies
 6. ⏳ Load Balancing — distribute based on free space
@@ -358,10 +471,14 @@ When everything is working:
 ✅ PostgreSQL `nodes` table shows both nodes as ACTIVE
 ✅ Tomcat accessible at `http://localhost:8080/jcloud`
 ✅ Can register and login via web interface
-✅ Dashboard shows live file count and node status
+✅ Dashboard shows live file count, node status, and Recent Files table
+✅ **Download File** and **My Files** buttons on dashboard are ACTIVE (purple, not grey)
 ✅ Upload File page works at `http://localhost:8080/jcloud/upload`
 ✅ After upload — chunk `.dat` files appear in `D:\j-cloud\storage\`
 ✅ After upload — rows in `files`, `chunks`, `chunk_locations` tables
+✅ My Files page at `http://localhost:8080/jcloud/files.jsp` lists all files
+✅ Clicking Download on any file triggers a browser download
+✅ Downloaded file opens correctly and matches the original
 
 ---
 
@@ -371,10 +488,13 @@ When everything is working:
 - **Check logs** in each terminal for errors
 - **Always start in order** — Master → DataNodes → Tomcat → Browser
 - **Never upload before starting DataNodes** — you will get "No active nodes" error
+- **Never download before starting DataNodes** — chunk retrieval will fail
 - **Database first** — always verify DB before starting nodes
 - **Monitor heartbeats** — key indicator of system health
+- **Tomcat restart needed** after deploying new servlet `.class` files
+- **Three deploy paths available** — `%TOMCAT_HOME%`, `jcloud` folder, or direct to Tomcat installation — all produce the same result
 - **PowerShell tip** — the folder is literally named `%TOMCAT_HOME%`, use it directly in paths
 
 ---
 
-Built with ❤️ using scalable Java patterns: Thread Pools, Connection Pooling, Scheduled Executors, Round-Robin Distribution, and Concurrent Data Structures.
+Built with ❤️ using scalable Java patterns: Thread Pools, Connection Pooling, Scheduled Executors, Round-Robin Distribution, Chunk Stitching, and Concurrent Data Structures.

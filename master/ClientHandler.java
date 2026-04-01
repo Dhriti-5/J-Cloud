@@ -1,13 +1,19 @@
 package master;
 
+import dao.ChunkLocationDAO;
+import dao.FileDAO;
 import dao.NodeDAO;
 import shared.NodeInfo;
 
 import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.List;
 
 /**
  * Client Handler - Protocol Parser
@@ -22,10 +28,14 @@ public class ClientHandler implements Runnable {
 
     private Socket clientSocket;
     private NodeDAO nodeDAO;
+    private FileDAO fileDAO;
+    private ChunkLocationDAO chunkLocationDAO;
 
     public ClientHandler(Socket socket) {
         this.clientSocket = socket;
         this.nodeDAO = new NodeDAO();
+        this.fileDAO = new FileDAO();
+        this.chunkLocationDAO = new ChunkLocationDAO();
     }
 
     @Override
@@ -61,6 +71,10 @@ public class ClientHandler implements Runnable {
                 case "PING":
                     out.println("PONG");
                     System.out.println("→ Sent: PONG");
+                    break;
+
+                case "DELETE_REQUEST":
+                    handleDeleteRequest(parts, out);
                     break;
                 
                 default:
@@ -145,6 +159,70 @@ public class ClientHandler implements Runnable {
         Integer nodeId = MasterServer.nodeIdMap.get(nodeName);
         if (nodeId != null) {
             nodeDAO.updateNodeStatus(nodeId, "ACTIVE");
+        }
+    }
+
+    /**
+     * Handle file deletion requests from the web layer.
+     * Protocol: DELETE_REQUEST|fileId
+     */
+    private void handleDeleteRequest(String[] parts, PrintWriter out) {
+        if (parts.length < 2) {
+            out.println("ERROR|Invalid DELETE_REQUEST format");
+            System.out.println("✗ Invalid DELETE_REQUEST format");
+            return;
+        }
+
+        int fileId;
+        try {
+            fileId = Integer.parseInt(parts[1]);
+        } catch (NumberFormatException e) {
+            out.println("ERROR|Invalid fileId");
+            System.out.println("✗ Invalid fileId in DELETE_REQUEST");
+            return;
+        }
+
+        // Gather locations before metadata delete.
+        List<ChunkLocationDAO.ChunkPhysicalLocation> locations =
+            chunkLocationDAO.getChunkLocationsByFileId(fileId);
+
+        // Delete metadata first so file disappears from UI immediately.
+        boolean deleted = fileDAO.deleteFile(fileId);
+        if (!deleted) {
+            out.println("ERROR|File not found or delete failed");
+            System.out.println("✗ Failed metadata delete for fileId=" + fileId);
+            return;
+        }
+
+        // Respond immediately; physical deletion runs asynchronously.
+        out.println("OK|DELETE_QUEUED|" + locations.size());
+        System.out.println("✓ Metadata deleted for fileId=" + fileId
+            + ", queued physical deletions=" + locations.size());
+
+        for (ChunkLocationDAO.ChunkPhysicalLocation location : locations) {
+            MasterServer.submitBackgroundTask(() -> deleteChunkOnDataNode(location));
+        }
+    }
+
+    private void deleteChunkOnDataNode(ChunkLocationDAO.ChunkPhysicalLocation location) {
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(location.getIpAddress(), location.getPort()), 3000);
+            socket.setSoTimeout(3000);
+
+            try (DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+                 DataInputStream in = new DataInputStream(socket.getInputStream())) {
+                out.writeUTF("DELETE_CHUNK|" + location.getChunkId());
+                out.flush();
+
+                String response = in.readUTF();
+                if (response == null || !response.startsWith("OK")) {
+                    System.err.println("⚠ Delete chunk not acknowledged by node "
+                        + location.getNodeId() + " for chunkId=" + location.getChunkId());
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("⚠ Node offline/unreachable, could not delete physical chunkId="
+                + location.getChunkId() + " on " + location.getIpAddress() + ":" + location.getPort());
         }
     }
 }
