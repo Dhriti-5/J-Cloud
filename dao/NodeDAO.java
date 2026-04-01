@@ -213,6 +213,33 @@ public class NodeDAO {
     }
 
     /**
+     * Day 10 — Get active nodes sorted by storage capacity (descending).
+     * 
+     * Used by UploadServlet and ReplicationManager to find the best nodes
+     * for chunk placement and replication.
+     * 
+     * @return list of active nodes sorted by storage capacity (highest first)
+     */
+    public List<NodeInfo> getActiveNodesSortedByCapacity() {
+        List<NodeInfo> nodes = new ArrayList<>();
+        String query = "SELECT * FROM nodes WHERE status = 'ACTIVE' ORDER BY storage_capacity DESC";
+
+        try (PreparedStatement stmt = connection.prepareStatement(query);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                nodes.add(extractNodeFromResultSet(rs));
+            }
+
+        } catch (SQLException e) {
+            System.err.println("✗ Error fetching active nodes sorted by capacity");
+            e.printStackTrace();
+        }
+
+        return nodes;
+    }
+
+    /**
      * Get all nodes regardless of status
      */
     public List<NodeInfo> getAllNodes() {

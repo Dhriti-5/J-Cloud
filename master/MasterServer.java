@@ -66,6 +66,9 @@ public class MasterServer {
             // Start the heartbeat death monitor
             startHeartbeatMonitor();
 
+            // Start the replication manager (Day 10 - autonomous healing thread)
+            startReplicationManager();
+
             // Accept incoming connections and delegate to thread pool
             while (running) {
                 try {
@@ -105,6 +108,21 @@ public class MasterServer {
         );
         
         System.out.println("✓ Heartbeat monitor started (check interval: 10s, timeout: 15s)\n");
+    }
+
+    /**
+     * Day 10 — Start the replication manager
+     * 
+     * Runs as a background thread that periodically scans for under-replicated chunks
+     * and autonomously heals them by copying to healthy nodes (self-healing).
+     */
+    private void startReplicationManager() {
+        ReplicationManager replManager = new ReplicationManager();
+        
+        // Submit to background task pool (separate from client handlers)
+        submitBackgroundTask(replManager);
+        
+        System.out.println("✓ Replication manager started (autonomous healing thread)\n");
     }
 
     /**

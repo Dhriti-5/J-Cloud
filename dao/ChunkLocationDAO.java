@@ -109,6 +109,68 @@ public class ChunkLocationDAO {
         return locations;
     }
 
+    /**
+     * Day 10 — Get count of physical replicas for a chunk.
+     * 
+     * Used by ReplicationManager to determine if a chunk is under-replicated.
+     * 
+     * @param chunkId the chunk to count
+     * @return number of nodes holding this chunk
+     */
+    public int getChunkLocationCount(int chunkId) {
+        String sql = "SELECT COUNT(DISTINCT node_id) as count FROM chunk_locations WHERE chunk_id = ?";
+
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, chunkId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("count");
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("✗ Error counting replica locations for chunkId=" + chunkId + ": " + e.getMessage());
+        }
+
+        return 0;
+    }
+
+    /**
+     * Day 10 — Find all chunks with fewer than 2 replicas.
+     * 
+     * Used by ReplicationManager to locate under-replicated chunks that need
+     * autonomous healing. Returns chunk_id and file_id.
+     * 
+     * @return list of maps containing chunk_id and file_id
+     */
+    public List<java.util.Map<String, Integer>> getUnderReplicatedChunks() {
+        String sql = "SELECT DISTINCT c.chunk_id, c.file_id " +
+                     "FROM chunks c " +
+                     "WHERE c.chunk_id IN ( " +
+                     "    SELECT chunk_id FROM chunk_locations " +
+                     "    GROUP BY chunk_id " +
+                     "    HAVING COUNT(DISTINCT node_id) < 2 " +
+                     ") " +
+                     "LIMIT 100";
+
+        List<java.util.Map<String, Integer>> results = new ArrayList<>();
+
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    java.util.Map<String, Integer> map = new java.util.HashMap<>();
+                    map.put("chunk_id", rs.getInt("chunk_id"));
+                    map.put("file_id", rs.getInt("file_id"));
+                    results.add(map);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("✗ Error fetching under-replicated chunks: " + e.getMessage());
+        }
+
+        return results;
+    }
+
     public static class ChunkPhysicalLocation {
         private final int chunkId;
         private final int nodeId;
