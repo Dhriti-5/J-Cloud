@@ -143,4 +143,30 @@ public class UserDAO {
         
         return false;
     }
+
+    /**
+     * Check if email already exists
+     * @param email Email to check
+     * @return true if exists, false otherwise
+     */
+
+    public boolean emailExists(String email) {
+        String query = "SELECT COUNT(*) FROM users WHERE email = ?";
+        
+        try (PreparedStatement stmt = connection.prepareStatement(query)) {
+            stmt.setString(1, email);
+            
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("✗ Error checking email existence: " + email);
+            e.printStackTrace();
+        }
+        
+        return false;
+    }
 }

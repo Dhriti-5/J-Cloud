@@ -276,9 +276,6 @@
                     &#128228; Upload File
                 </a>
                 <a href="<%= request.getContextPath() %>/files.jsp" class="action-btn">
-                    &#128229; Download File
-                </a>
-                <a href="<%= request.getContextPath() %>/files.jsp" class="action-btn">
                     &#128203; My Files
                 </a>
             </div>
