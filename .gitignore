@@ -40,6 +40,3 @@ PROJECT_SUMMARY.md
 .env
 
 
-
-# Open .gitignore and add storage/ at the bottom
-Add-Content "D:\j-cloud\.gitignore" "`nstorage/"
