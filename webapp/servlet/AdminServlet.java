@@ -13,6 +13,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.util.List;
 import java.util.Map;
 
@@ -27,6 +29,8 @@ import java.util.Map;
  */
 @WebServlet("/admin")
 public class AdminServlet extends HttpServlet {
+
+    private static final int NODE_HEALTHCHECK_TIMEOUT_MS = 1200;
 
     private NodeDAO nodeDAO;
     private EventLogDAO eventLogDAO;      // Day 12: Event logging
@@ -71,6 +75,18 @@ public class AdminServlet extends HttpServlet {
             if (allNodes != null) {
                 for (NodeInfo node : allNodes) {
                     totalCapacity += node.getStorageCapacity();
+
+                    String dbStatus = node.getStatus();
+                    boolean isReachable = isNodeReachable(node);
+                    String effectiveStatus = isReachable ? "ACTIVE" : "DEAD";
+
+                    // Keep DB status aligned with observed network state.
+                    if (!effectiveStatus.equalsIgnoreCase(dbStatus)) {
+                        nodeDAO.updateNodeStatus(node.getNodeId(), effectiveStatus);
+                    }
+
+                    // Render live status in dashboard for this request.
+                    node.setStatus(effectiveStatus);
                     
                     if ("DEAD".equals(node.getStatus())) {
                         deadNodes++;
@@ -116,6 +132,19 @@ public class AdminServlet extends HttpServlet {
             e.printStackTrace();
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, 
                              "Error loading cluster status");
+        }
+    }
+
+    private boolean isNodeReachable(NodeInfo node) {
+        if (node == null || node.getIpAddress() == null || node.getIpAddress().trim().isEmpty() || node.getPort() <= 0) {
+            return false;
+        }
+
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(node.getIpAddress(), node.getPort()), NODE_HEALTHCHECK_TIMEOUT_MS);
+            return true;
+        } catch (IOException ex) {
+            return false;
         }
     }
 }

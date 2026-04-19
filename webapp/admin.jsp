@@ -57,6 +57,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="5">
     <title>Admin Dashboard - Node Monitoring - J-Cloud</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -289,8 +290,6 @@
     <div class="navbar">
         <h1>🏢 J-Cloud Admin</h1>
         <div class="nav-links">
-            <a href="<%= request.getContextPath() %>/dashboard.jsp">📊 Dashboard</a>
-            <a href="<%= request.getContextPath() %>/admin">📡 Node Monitoring</a>
             <span>👤 <%= user.getUsername() %></span>
             <a href="<%= request.getContextPath() %>/logout" class="logout-btn">Logout</a>
         </div>
