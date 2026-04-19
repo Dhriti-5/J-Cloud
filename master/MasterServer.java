@@ -19,7 +19,8 @@ import java.util.concurrent.*;
  */
 public class MasterServer {
 
-    private static final int PORT = 9000;
+    private static final String HOST = Config.MASTER_HOST;
+    private static final int PORT = Config.MASTER_PORT;
     private static final int THREAD_POOL_SIZE = 50;
     private static final int BACKGROUND_TASK_POOL_SIZE = 100;
     
@@ -54,11 +55,12 @@ public class MasterServer {
      */
     public void start() {
         try {
-            InetAddress bindAddr = InetAddress.getByName(Config.MASTER_HOST);
+            InetAddress bindAddr = InetAddress.getByName(HOST);
             serverSocket = new ServerSocket(PORT, 50, bindAddr);
 
             System.out.println("╔════════════════════════════════════════════╗");
             System.out.println("║   J-CLOUD MASTER NODE STARTED              ║");
+            System.out.println("║   Host: " + String.format("%-34s", HOST) + "║");
             System.out.println("║   Port: " + PORT + "                              ║");
             System.out.println("║   Thread Pool Size: " + THREAD_POOL_SIZE + "                   ║");
             System.out.println("╚════════════════════════════════════════════╝\n");

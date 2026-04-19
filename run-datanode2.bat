@@ -5,9 +5,14 @@ echo =====================================
 echo   STARTING DATA NODE 2
 echo =====================================
 echo.
+set "MASTER_HOST=%JCLOUD_MASTER_HOST%"
+if "%MASTER_HOST%"=="" set "MASTER_HOST=localhost"
+set "MASTER_PORT=%JCLOUD_MASTER_PORT%"
+if "%MASTER_PORT%"=="" set "MASTER_PORT=9000"
+
 echo Node Name: DataNode2
 echo Port: 9102
-echo Master: localhost:9000
+echo Master: %MASTER_HOST%:%MASTER_PORT%
 echo.
 
 set JDBC_DRIVER=

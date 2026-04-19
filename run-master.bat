@@ -5,7 +5,13 @@ echo =====================================
 echo   STARTING J-CLOUD MASTER NODE
 echo =====================================
 echo.
-echo Port: 9000
+set "MASTER_HOST=%JCLOUD_MASTER_HOST%"
+if "%MASTER_HOST%"=="" set "MASTER_HOST=localhost"
+set "MASTER_PORT=%JCLOUD_MASTER_PORT%"
+if "%MASTER_PORT%"=="" set "MASTER_PORT=9000"
+
+echo Host: %MASTER_HOST%
+echo Port: %MASTER_PORT%
 echo Thread Pool: 50 threads
 echo Heartbeat Monitor: Enabled
 echo.

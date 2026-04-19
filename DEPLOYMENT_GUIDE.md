@@ -1,500 +1,304 @@
-﻿# J-Cloud - Setup & Deployment Guide
+# J-Cloud Full Clean Redeployment Guide (All Features)
 
-## 🎯 What We Built - All 8 Days Complete!
+This guide is for full project redeployment.
+It validates all core features end-to-end:
 
-### ✅ Phase 1: Database & Shared Layer
-- **DBConnection.java** - Thread-safe Singleton for PostgreSQL connections
-- **UserDAO.java** - User registration and authentication
-- **NodeDAO.java** - Node registration and status management
-- **FileDAO.java** - File metadata management
-- **ChunkDAO.java** - Chunk metadata management
-- **ChunkLocationDAO.java** - Chunk-to-node mapping
-- **Shared POJOs** - User, NodeInfo, Chunk, ChunkLocation, FileMetadata (with getters/setters)
+- Auth (Register/Login/Logout)
+- Upload and chunking
+- My Files listing
+- Download
+- Delete
+- Replication
+- Failure detection
+- Auto-recovery and event logs
 
-### ✅ Phase 2: Scalable Master Node
-- **MasterServer.java** - Main server with 50-thread pool
-- **ClientHandler.java** - Protocol parser (REGISTER_NODE, HEARTBEAT, PING)
-- **HeartbeatMonitor.java** - Scheduled death detector (15s timeout)
-- ConcurrentHashMap for thread-safe node tracking
+## 1) Team Deployment Model
 
-### ✅ Phase 3: Data Node Development
-- **DataNodeServer.java** - Auto-registration with Master, chunk storage server
-- **DataNode2Launcher.java** - Quick launcher for second node
-- Scheduled heartbeat every 5 seconds
-- Graceful shutdown hooks
-- Chunk files stored as `chunk_fileId_chunkIndex_chunkId.dat` in `storage/` folder
+- Machine A (teammate): Tomcat + Master + DataNode2 + DataNode3 (temporary)
+- Machine B (you): DataNode1
+- Primary admin page: http://100.89.131.79:8080/jcloud/admin.jsp
 
-### ✅ Phase 4: Tomcat Web Application
-- **RegisterServlet.java** - User registration with MD5 hashing
-- **LoginServlet.java** - Authentication with session management
-- **LogoutServlet.java** - Session invalidation
-- **register.jsp, login.jsp, dashboard.jsp** - Beautiful UI pages
-- **web.xml** - Tomcat configuration
+## 2) Pre-Deployment Requirements
 
-### ✅ Phase 5: File Upload (Day 5)
-- **UploadServlet.java** - Chunked parallel file upload to data nodes
-- **upload.jsp** - Drag and drop upload UI with progress bar
-- **dashboard.jsp** - Updated with live file count, storage used, active node list
-- Round-robin chunk distribution using Java ExecutorService
+On both machines:
 
-### ✅ Phase 6: File Download System (Day 8)
-- **DownloadServlet.java** - Retrieves all chunks for a file in correct order, connects to each DataNode via TCP socket, and streams bytes sequentially into the HTTP response for a seamless browser download
-- **ChunkLocationDAO.java** - Updated with method to look up which node holds each chunk
-- **NodeDAO.java** - Updated with method to resolve a node ID into IP address and port
-- **files.jsp** - My Files page listing all uploaded files with size, chunk count, and per-file download button
-- **dashboard.jsp** - Download File and My Files buttons now active; Recent Files table with inline download links added directly on dashboard
-- Fault-tolerant download — if a node is DEAD, next available replica is tried automatically
+- Java installed and available in PATH
+- Same git branch checked out
+- Access to Neon PostgreSQL
+- Tailscale connectivity between both machines
 
----
+On Machine A:
 
-## 📋 Prerequisites
+- Tomcat installed at:
+  C:\Program Files\Apache Software Foundation\Tomcat 9.0
 
-Before you start, ensure you have:
+## 3) Database Preparation (Neon)
 
-1. **Java JDK 8+** - [Download here](https://www.oracle.com/java/technologies/downloads/)
-2. **Neon PostgreSQL** - Cloud database configured via `.env` file
-3. **Apache Tomcat 9.0+** - Available inside `%TOMCAT_HOME%` folder in the repo, and installed at `C:\Program Files\Apache Software Foundation\Tomcat 9.0`
-4. **PostgreSQL JDBC Driver** - `webapp\WEB-INF\lib\postgresql-42.7.10.jar`
-5. **servlet-api.jar** - In project root `D:\j-cloud\servlet-api.jar`
+Run once (safe idempotent form):
 
----
-
-## 🗄️ Step 1: Database Setup
-
-Your `.env` file must exist at `D:\j-cloud\.env`:
-```
-JCLOUD_DB_URL=postgresql://user:password@host/neondb?sslmode=require&channel_binding=require
-```
-
-Verify tables in Neon SQL Editor:
 ```sql
-SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';
--- Should show: users, files, chunks, nodes, chunk_locations
+CREATE TABLE IF NOT EXISTS event_logs (
+    log_id SERIAL PRIMARY KEY,
+    event_type VARCHAR(50) NOT NULL,
+    message TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 ```
 
-If nodes are not populated:
+Optional checks:
+
 ```sql
-INSERT INTO nodes (node_name, ip_address, port, status, storage_capacity)
-VALUES
-  ('DataNode1', 'localhost', 9101, 'ACTIVE', 10737418240),
-  ('DataNode2', 'localhost', 9102, 'ACTIVE', 10737418240);
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
+ORDER BY table_name;
+
+SELECT COUNT(*) FROM users;
+SELECT COUNT(*) FROM files;
+SELECT COUNT(*) FROM chunks;
+SELECT COUNT(*) FROM chunk_locations;
+SELECT COUNT(*) FROM nodes;
+SELECT COUNT(*) FROM event_logs;
 ```
 
----
+Optional clean test reset (use only if you want a fresh demo dataset):
 
-## 🔧 Step 2: Project Structure
-
-Your project should look like this:
-```
-J-Cloud/
-├── shared/              # Shared POJOs
-├── utils/               # DBConnection singleton
-├── dao/                 # Data Access Objects
-├── master/              # Master Node
-├── datanode/            # Data Nodes
-├── webapp/              # Web Application (edit files here)
-│   ├── servlet/
-│   │   ├── LoginServlet.java
-│   │   ├── LogoutServlet.java
-│   │   ├── RegisterServlet.java
-│   │   ├── UploadServlet.java
-│   │   └── DownloadServlet.java   ← New Day 8
-│   ├── WEB-INF/
-│   │   ├── web.xml
-│   │   └── lib/
-│   │       └── postgresql-42.7.10.jar
-│   ├── index.jsp
-│   ├── login.jsp
-│   ├── register.jsp
-│   ├── dashboard.jsp              ← Updated Day 8
-│   ├── upload.jsp
-│   └── files.jsp                  ← New Day 8
-├── %TOMCAT_HOME%/       # Tomcat — deployment goes here (Option A)
-│   └── webapps/
-│       └── jcloud/
-│           ├── WEB-INF/
-│           │   ├── classes/
-│           │   │   ├── shared/
-│           │   │   ├── utils/
-│           │   │   ├── dao/
-│           │   │   └── servlet/
-│           │   ├── lib/
-│           │   │   └── postgresql-42.7.10.jar
-│           │   └── web.xml
-│           ├── index.jsp
-│           ├── login.jsp
-│           ├── register.jsp
-│           ├── dashboard.jsp
-│           ├── upload.jsp
-│           └── files.jsp
-├── jcloud/              # Alternative deployment folder (Option B)
-│   └── webapps/
-│       └── jcloud/
-│           ├── WEB-INF/
-│           │   ├── classes/
-│           │   └── lib/
-│           ├── dashboard.jsp
-│           ├── upload.jsp
-│           └── files.jsp
-├── database/
-│   └── schema_postgres.sql
-├── bin/                 # Compiled classes
-├── storage/             # Chunk .dat files
-└── servlet-api.jar
+```sql
+TRUNCATE TABLE chunk_locations RESTART IDENTITY;
+TRUNCATE TABLE chunks RESTART IDENTITY;
+TRUNCATE TABLE files RESTART IDENTITY;
+TRUNCATE TABLE event_logs RESTART IDENTITY;
+TRUNCATE TABLE nodes RESTART IDENTITY;
 ```
 
----
+## 4) Git Sync + Build (Both Machines)
 
-## 🔨 Step 3: Compile the Project
-
-Run `compile.bat` from `D:\j-cloud`:
-```powershell
-cd D:\j-cloud
-compile.bat
-```
-
-`compile.bat` automatically:
-- Finds the PostgreSQL JDBC driver
-- Finds `servlet-api.jar` from project root or Tomcat
-- Compiles shared, utils, dao, master, datanode, and servlet classes (including `DownloadServlet.java`)
-- Outputs compiled `.class` files to `bin\`
-
----
-
-## 🚀 Step 4: Deploy to Tomcat
-
-Three deploy paths are available — use whichever applies to your setup. All three end with the same result.
-
----
-
-### ✅ Option A — Deploy via `%TOMCAT_HOME%` folder in the repo
+Run on Machine A and Machine B:
 
 ```powershell
+cd C:\Users\Pc\J-Cloud
+git fetch
+git checkout pr-jcloud
+git pull origin pr-jcloud
+.\compile.bat
+```
+
+If your branch name is different, replace it in both checkout/pull commands.
+
+## 5) Machine A Clean Tomcat Redeploy (Full)
+
+Run this block in Administrator PowerShell on Machine A:
+
+```powershell
+$Repo = 'C:\Users\Pc\J-Cloud'
+$Tomcat = 'C:\Program Files\Apache Software Foundation\Tomcat 9.0'
+$AppName = 'jcloud'
+$WebAppTarget = Join-Path $Tomcat "webapps\$AppName"
+$WorkTarget = Join-Path $Tomcat "work\Catalina\localhost\$AppName"
+
+# Stop Tomcat
+& (Join-Path $Tomcat 'bin\shutdown.bat')
+Start-Sleep -Seconds 5
+
+# Remove old app and compiled JSP cache
+if (Test-Path $WebAppTarget) { Remove-Item -Recurse -Force $WebAppTarget }
+if (Test-Path $WorkTarget)   { Remove-Item -Recurse -Force $WorkTarget }
+
+# Recreate app directories
+New-Item -ItemType Directory -Force -Path "$WebAppTarget\WEB-INF\classes\shared"   | Out-Null
+New-Item -ItemType Directory -Force -Path "$WebAppTarget\WEB-INF\classes\utils"    | Out-Null
+New-Item -ItemType Directory -Force -Path "$WebAppTarget\WEB-INF\classes\dao"      | Out-Null
+New-Item -ItemType Directory -Force -Path "$WebAppTarget\WEB-INF\classes\servlet"  | Out-Null
+New-Item -ItemType Directory -Force -Path "$WebAppTarget\WEB-INF\classes\master"   | Out-Null
+New-Item -ItemType Directory -Force -Path "$WebAppTarget\WEB-INF\classes\datanode" | Out-Null
+New-Item -ItemType Directory -Force -Path "$WebAppTarget\WEB-INF\lib"               | Out-Null
+
 # Copy compiled classes
-Copy-Item -Recurse -Force "D:\j-cloud\bin\shared\*"  "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\shared\"
-Copy-Item -Recurse -Force "D:\j-cloud\bin\utils\*"   "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\utils\"
-Copy-Item -Recurse -Force "D:\j-cloud\bin\dao\*"     "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\dao\"
-Copy-Item -Recurse -Force "D:\j-cloud\bin\servlet\*" "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\classes\servlet\"
+Copy-Item -Recurse -Force "$Repo\bin\shared\*"   "$WebAppTarget\WEB-INF\classes\shared\"
+Copy-Item -Recurse -Force "$Repo\bin\utils\*"    "$WebAppTarget\WEB-INF\classes\utils\"
+Copy-Item -Recurse -Force "$Repo\bin\dao\*"      "$WebAppTarget\WEB-INF\classes\dao\"
+Copy-Item -Recurse -Force "$Repo\bin\servlet\*"  "$WebAppTarget\WEB-INF\classes\servlet\"
+if (Test-Path "$Repo\bin\master")   { Copy-Item -Recurse -Force "$Repo\bin\master\*"   "$WebAppTarget\WEB-INF\classes\master\" }
+if (Test-Path "$Repo\bin\datanode") { Copy-Item -Recurse -Force "$Repo\bin\datanode\*" "$WebAppTarget\WEB-INF\classes\datanode\" }
 
-# Copy JDBC driver and web.xml
-Copy-Item -Force "D:\j-cloud\webapp\WEB-INF\lib\postgresql-42.7.10.jar" "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\lib\"
-Copy-Item -Force "D:\j-cloud\webapp\WEB-INF\web.xml"                    "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\WEB-INF\web.xml"
+# Copy web.xml and JDBC driver
+Copy-Item -Force "$Repo\webapp\WEB-INF\web.xml" "$WebAppTarget\WEB-INF\web.xml"
+Copy-Item -Force "$Repo\webapp\WEB-INF\lib\postgresql-42.7.10.jar" "$WebAppTarget\WEB-INF\lib\"
 
-# Copy all JSP files (including new files.jsp from Day 8)
-Copy-Item -Force "D:\j-cloud\webapp\index.jsp"     "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\index.jsp"
-Copy-Item -Force "D:\j-cloud\webapp\login.jsp"     "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\login.jsp"
-Copy-Item -Force "D:\j-cloud\webapp\register.jsp"  "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\register.jsp"
-Copy-Item -Force "D:\j-cloud\webapp\dashboard.jsp" "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\dashboard.jsp"
-Copy-Item -Force "D:\j-cloud\webapp\upload.jsp"    "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\upload.jsp"
-Copy-Item -Force "D:\j-cloud\webapp\files.jsp"     "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud\files.jsp"
+# Copy all JSP pages
+Copy-Item -Force "$Repo\webapp\*.jsp" "$WebAppTarget\"
 
-# Push %TOMCAT_HOME% jcloud folder into actual Tomcat installation
-Copy-Item -Recurse -Force "D:\j-cloud\%TOMCAT_HOME%\webapps\jcloud" "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\"
+# Start Tomcat
+& (Join-Path $Tomcat 'bin\startup.bat')
+Write-Host 'Tomcat full clean redeploy complete.' -ForegroundColor Green
 ```
 
----
+## 6) Start Runtime Services
 
-### ✅ Option B — Deploy via `jcloud` folder in the repo
+### 6.1 Machine A (teammate)
+
+Open three terminals in C:\Users\Pc\J-Cloud:
+
+Terminal A1:
 
 ```powershell
-# Copy compiled classes
-Copy-Item -Recurse -Force "D:\j-cloud\bin\shared\*"  "D:\j-cloud\jcloud\WEB-INF\classes\shared\"
-Copy-Item -Recurse -Force "D:\j-cloud\bin\utils\*"   "D:\j-cloud\jcloud\WEB-INF\classes\utils\"
-Copy-Item -Recurse -Force "D:\j-cloud\bin\dao\*"     "D:\j-cloud\jcloud\WEB-INF\classes\dao\"
-Copy-Item -Recurse -Force "D:\j-cloud\bin\servlet\*" "D:\j-cloud\jcloud\WEB-INF\classes\servlet\"
-
-# Copy all JSP files (including new files.jsp from Day 8)
-Copy-Item -Force "D:\j-cloud\webapp\index.jsp"     "D:\j-cloud\jcloud\index.jsp"
-Copy-Item -Force "D:\j-cloud\webapp\login.jsp"     "D:\j-cloud\jcloud\login.jsp"
-Copy-Item -Force "D:\j-cloud\webapp\register.jsp"  "D:\j-cloud\jcloud\register.jsp"
-Copy-Item -Force "D:\j-cloud\webapp\dashboard.jsp" "D:\j-cloud\jcloud\dashboard.jsp"
-Copy-Item -Force "D:\j-cloud\webapp\upload.jsp"    "D:\j-cloud\jcloud\upload.jsp"
-Copy-Item -Force "D:\j-cloud\webapp\files.jsp"     "D:\j-cloud\jcloud\files.jsp"
-
-# Push jcloud folder into actual Tomcat installation
-Copy-Item -Recurse -Force "D:\j-cloud\jcloud" "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\"
+.\run-master.bat
 ```
 
----
-
-### ✅ Option C — Deploy directly to Tomcat installation
+Terminal A2:
 
 ```powershell
-# Copy compiled classes directly to Tomcat
-Copy-Item -Recurse -Force "D:\j-cloud\bin\shared\*"  "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\classes\shared\"
-Copy-Item -Recurse -Force "D:\j-cloud\bin\utils\*"   "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\classes\utils\"
-Copy-Item -Recurse -Force "D:\j-cloud\bin\dao\*"     "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\classes\dao\"
-Copy-Item -Recurse -Force "D:\j-cloud\bin\servlet\*" "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\classes\servlet\"
-
-# Copy JDBC driver and web.xml directly to Tomcat
-Copy-Item -Force "D:\j-cloud\webapp\WEB-INF\lib\postgresql-42.7.10.jar" "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\lib\"
-Copy-Item -Force "D:\j-cloud\webapp\WEB-INF\web.xml"                    "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\web.xml"
-
-# Copy all JSP files directly to Tomcat (including new files.jsp from Day 8)
-Copy-Item -Force "D:\j-cloud\webapp\index.jsp"     "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\index.jsp"
-Copy-Item -Force "D:\j-cloud\webapp\login.jsp"     "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\login.jsp"
-Copy-Item -Force "D:\j-cloud\webapp\register.jsp"  "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\register.jsp"
-Copy-Item -Force "D:\j-cloud\webapp\dashboard.jsp" "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\dashboard.jsp"
-Copy-Item -Force "D:\j-cloud\webapp\upload.jsp"    "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\upload.jsp"
-Copy-Item -Force "D:\j-cloud\webapp\files.jsp"     "C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\files.jsp"
+.\run-datanode2.bat
 ```
 
----
-
-### Restart Tomcat after any deploy (required for DownloadServlet to load)
+Terminal A3 (DataNode3 startup command):
 
 ```powershell
-& "C:\Program Files\Apache Software Foundation\Tomcat 9.0\bin\shutdown.bat"
-Start-Sleep -Seconds 4
-& "C:\Program Files\Apache Software Foundation\Tomcat 9.0\bin\startup.bat"
+cd C:\Users\Pc\J-Cloud
+$JDBC = (Get-ChildItem "$PWD\postgresql-*.jar" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+if (-not $JDBC) { $JDBC = (Get-ChildItem "$PWD\webapp\WEB-INF\lib\postgresql-*.jar" | Select-Object -First 1).FullName }
+java -cp "bin;$JDBC" datanode.DataNodeServer DataNode3 9103
 ```
 
----
+### 6.2 Machine B (you)
 
-## 🚀 Step 5: Run the System (In Order!)
-
-Open **4 separate PowerShell terminals**, all from `D:\j-cloud`:
-
-### STEP 1: Start Master Node
-
-**Terminal 1:**
 ```powershell
-./run-master.bat
-```
-You should see:
-```
-╔════════════════════════════════════════════╗
-║   J-CLOUD MASTER NODE STARTED              ║
-║   Port: 9000                               ║
-║   Thread Pool Size: 50                     ║
-╚════════════════════════════════════════════╝
-
-✓ Database connection established successfully
-✓ Heartbeat monitor started (check interval: 10s, timeout: 15s)
+cd C:\Users\Pc\J-Cloud
+.\run-datanode1.bat
 ```
 
-### STEP 2: Start Data Node 1
+## 7) Full Feature Smoke Test (Do This In Order)
 
-**Terminal 2:**
-```powershell
-./run-datanode1.bat
-```
-You should see:
-```
-→ Registering with Master Node at localhost:9000
-  Sent: REGISTER_NODE|DataNode1|localhost|9101|10737418240
-  Response: OK|Node registered successfully
-✓ Registration successful!
+### 7.1 App Reachability
 
-♥ Starting heartbeat service (interval: 5s)
-♥ Heartbeat sent and acknowledged
-```
+- Open: http://100.89.131.79:8080/jcloud
+- Open: http://100.89.131.79:8080/jcloud/dashboard.jsp
+- Open: http://100.89.131.79:8080/jcloud/files.jsp
+- Open: http://100.89.131.79:8080/jcloud/admin.jsp
 
-### STEP 3: Start Data Node 2
+### 7.2 Auth Flow (Register/Login/Logout)
 
-**Terminal 3:**
-```powershell
-./run-datanode2.bat
-```
+1. Register a brand new user.
+2. Login with same user.
+3. Confirm dashboard loads with user context.
+4. Logout and confirm session clears.
 
-### STEP 4: Start Tomcat
+### 7.3 Upload + Chunking
 
-**Terminal 4:**
-```powershell
-& "C:\Program Files\Apache Software Foundation\Tomcat 9.0\bin\startup.bat"
-```
+1. Login again.
+2. Upload a medium file.
+3. Confirm upload success in UI.
+4. Confirm file appears in My Files.
 
----
+Verify in SQL:
 
-## 🧪 Step 5: Test the System
-
-### Test 1: Check Database Nodes
 ```sql
-SELECT * FROM nodes;
--- Should show DataNode1 and DataNode2 as ACTIVE
+SELECT file_id, file_name, file_size, owner_id, upload_time
+FROM files
+ORDER BY file_id DESC
+LIMIT 5;
+
+SELECT chunk_id, file_id, chunk_index, chunk_size
+FROM chunks
+ORDER BY chunk_id DESC
+LIMIT 20;
+
+SELECT id, chunk_id, node_id
+FROM chunk_locations
+ORDER BY id DESC
+LIMIT 40;
 ```
 
-### Test 2: Test Heartbeat Death Detection
-- Kill one Data Node (Ctrl+C in its terminal)
-- Wait 15 seconds
-- Master should mark it as DEAD
-- Check: `SELECT * FROM nodes;`
+### 7.4 Download
 
-### Test 3: Test Web Application — Upload
+1. Click Download for uploaded file.
+2. Open downloaded file and verify integrity.
 
-1. **Access the app:** `http://localhost:8080/jcloud`
-2. **Register a new user**
-3. **Login with credentials**
-4. **View dashboard** — shows active nodes and file count
-5. **Click Upload File**
-6. **Select any file** and click Upload & Distribute
-7. **Check DataNode terminals** — chunk `.dat` files are created in `storage/`
-8. **Verify in DB:**
+### 7.5 Delete
+
+1. Delete the uploaded file from UI.
+2. Confirm file disappears from My Files.
+
+Verify metadata cleanup:
+
 ```sql
-SELECT * FROM files;
-SELECT * FROM chunks;
-SELECT * FROM chunk_locations;
+SELECT * FROM files ORDER BY file_id DESC LIMIT 10;
+SELECT * FROM chunks ORDER BY chunk_id DESC LIMIT 20;
+SELECT * FROM chunk_locations ORDER BY id DESC LIMIT 40;
 ```
 
-### Test 4: Test Web Application — Download (Day 8)
+### 7.6 Replication (Day 10)
 
-1. From Dashboard, click **Download File** or **My Files**
-2. The **My Files** page (`/files.jsp`) opens — lists all your uploaded files
-3. Click the **Download** button next to any file
-4. Browser triggers a file download
-5. Open the downloaded file — verify it is not corrupted and matches the original
+1. Upload another file while DataNode1+2+3 are online.
+2. Verify chunk_locations has multiple entries per chunk.
 
----
+Quick RF view:
 
-## 📊 System Architecture
-```
-┌─────────────────────────────────────────────────────┐
-│              TOMCAT (port 8080)                      │
-│  Register  Login  Dashboard  Upload   Download       │
-│  Servlet   Servlet  JSP      Servlet  Servlet        │
-└──────────────────┬──────────────────────────────────┘
-                   │
-         ┌─────────▼──────────┐
-         │  DAOs              │
-         │  UserDAO NodeDAO   │
-         │  FileDAO ChunkDAO  │
-         │  ChunkLocationDAO  │
-         └─────────┬──────────┘
-                   │
-         ┌─────────▼──────────┐
-         │   DBConnection     │
-         │   (Singleton)      │
-         └─────────┬──────────┘
-                   │
-         ┌─────────▼──────────┐
-         │  Neon PostgreSQL   │
-         │  (Cloud DB)        │
-         └────────────────────┘
-
-┌────────────────────────────────────────────────────┐
-│           MASTER NODE (9000)                       │
-│   Thread Pool (50) → ClientHandler                 │
-│   HeartbeatMonitor (15s timeout)                   │
-│   ConcurrentHashMap<Node, Timestamp>               │
-└───────────┬────────────────────┬──────────────────┘
-            │                    │
-    ┌───────▼──────┐     ┌──────▼──────┐
-    │ Data Node 1  │     │ Data Node 2 │
-    │ (Port 9101)  │     │ (Port 9102) │
-    │ ♥ HB (5s)   │     │ ♥ HB (5s)  │
-    │ storage/     │     │ storage/    │
-    └──────────────┘     └─────────────┘
+```sql
+SELECT chunk_id, COUNT(DISTINCT node_id) AS replica_count
+FROM chunk_locations
+GROUP BY chunk_id
+ORDER BY chunk_id DESC;
 ```
 
----
+### 7.7 Failure Detection + Auto-Recovery (Days 11-12)
 
-## 🔑 Key Configuration
+1. Keep Master + DataNode1 + DataNode2 + DataNode3 running.
+2. Kill DataNode2 terminal.
+3. Wait around 15 seconds:
+   - Node status should become DEAD.
+   - event_logs should include NODE_FAILURE and METADATA_PURGE.
+4. Wait up to 60 seconds (ReplicationManager cycle):
+   - Under-replicated chunks should be healed to healthy nodes.
+   - event_logs should include recovery success entries.
 
-All DB configuration is via `.env` file in project root:
+Verification SQL:
+
+```sql
+SELECT node_id, node_name, ip_address, port, status
+FROM nodes
+ORDER BY node_id;
+
+SELECT log_id, event_type, message, created_at
+FROM event_logs
+ORDER BY created_at DESC
+LIMIT 30;
+
+SELECT
+    COUNT(DISTINCT CASE WHEN rep_count >= 2 THEN chunk_id END) AS healthy_chunks,
+    COUNT(DISTINCT CASE WHEN rep_count < 2 THEN chunk_id END) AS under_replicated_chunks
+FROM (
+    SELECT chunk_id, COUNT(DISTINCT node_id) AS rep_count
+    FROM chunk_locations
+    GROUP BY chunk_id
+) t;
 ```
-JCLOUD_DB_URL=postgresql://user:password@host/neondb?sslmode=require&channel_binding=require
-```
 
-| Component | Address |
-|-----------|---------|
-| Master Node | localhost:9000 |
-| Data Node 1 | localhost:9101 |
-| Data Node 2 | localhost:9102 |
-| PostgreSQL | Neon via .env |
-| Tomcat | localhost:8080 |
+## 8) Common Issues and Fixes
 
----
+- Old JSP still appears:
+  - Rerun Section 5 and ensure Tomcat work cache folder is deleted.
+- 404 on servlet/JSP:
+  - Confirm JSP files copied and servlet classes exist under WEB-INF/classes/servlet.
+- DataNode3 cannot start:
+  - Ensure Master is running first.
+  - Ensure port 9103 is free.
+  - Ensure JDBC jar was detected in command.
+- DataNode1 cannot register:
+  - Verify network path to Master over Tailscale and master host/port config.
+- No recovery observed:
+  - Confirm dead-node chunk_locations were purged.
+  - Wait full 60-second replication cycle.
 
-## 🛠 Troubleshooting
+## 9) Final Sign-Off Checklist
 
-### Issue: "Port 9000 already in use"
-```powershell
-taskkill /IM java.exe /F
-```
-Then restart master.
-
-### Issue: "No active data nodes available" on upload
-Start `run-datanode1.bat` before uploading.
-
-### Issue: "Cannot connect to database"
-- Verify `.env` has correct `JCLOUD_DB_URL`
-- Run `test-database.bat` to confirm connection
-
-### Issue: "Master Node connection refused"
-- Ensure Master Node is started first
-- Check port 9000 is not blocked by firewall
-
-### Issue: "Node marked as DEAD"
-- Check Data Node is running
-- Verify heartbeat messages in Master console
-
-### Issue: "Tomcat 404 error on /upload"
-- Re-run the deploy commands from Step 4
-- Verify `UploadServlet.class` exists in `C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\classes\servlet\`
-
-### Issue: "Tomcat 404 error on /download"
-- Verify `DownloadServlet.class` exists in `C:\Program Files\Apache Software Foundation\Tomcat 9.0\webapps\jcloud\WEB-INF\classes\servlet\`
-- Restart Tomcat — new servlet classes require a restart to register
-
-### Issue: "Download starts but file is corrupted or empty"
-- Ensure DataNode(s) are running — chunk bytes cannot be fetched if nodes are DEAD
-- Confirm rows exist in `chunk_locations` table for the file
-
-### Issue: "files.jsp shows 404"
-- Ensure `files.jsp` was copied into the deployment folder and into Tomcat webapps
-- Re-run the deploy commands from Step 4
-
-### Issue: "compile.bat skips servlet compilation"
-Ensure `servlet-api.jar` exists in project root `D:\j-cloud\servlet-api.jar`
-
----
-
-## 📈 Next Steps
-
-Now that upload and download are both working, you can implement:
-
-1. ✅ File Upload — chunking and distribution
-2. ✅ File Download — chunk stitching and streaming
-3. ✅ My Files page — list and download uploaded files
-4. ⏳ Replication Logic — store chunks on multiple nodes
-5. ⏳ Node Recovery — re-replicate when node dies
-6. ⏳ Load Balancing — distribute based on free space
-
----
-
-## 🎉 Success Indicators
-
-When everything is working:
-
-✅ Master Node shows heartbeat monitor running
-✅ Both Data Nodes show "Heartbeat sent and acknowledged"
-✅ PostgreSQL `nodes` table shows both nodes as ACTIVE
-✅ Tomcat accessible at `http://localhost:8080/jcloud`
-✅ Can register and login via web interface
-✅ Dashboard shows live file count, node status, and Recent Files table
-✅ **Download File** and **My Files** buttons on dashboard are ACTIVE (purple, not grey)
-✅ Upload File page works at `http://localhost:8080/jcloud/upload`
-✅ After upload — chunk `.dat` files appear in `D:\j-cloud\storage\`
-✅ After upload — rows in `files`, `chunks`, `chunk_locations` tables
-✅ My Files page at `http://localhost:8080/jcloud/files.jsp` lists all files
-✅ Clicking Download on any file triggers a browser download
-✅ Downloaded file opens correctly and matches the original
-
----
-
-## 💡 Development Tips
-
-- **Use separate terminals** for each component (easier debugging)
-- **Check logs** in each terminal for errors
-- **Always start in order** — Master → DataNodes → Tomcat → Browser
-- **Never upload before starting DataNodes** — you will get "No active nodes" error
-- **Never download before starting DataNodes** — chunk retrieval will fail
-- **Database first** — always verify DB before starting nodes
-- **Monitor heartbeats** — key indicator of system health
-- **Tomcat restart needed** after deploying new servlet `.class` files
-- **Three deploy paths available** — `%TOMCAT_HOME%`, `jcloud` folder, or direct to Tomcat installation — all produce the same result
-- **PowerShell tip** — the folder is literally named `%TOMCAT_HOME%`, use it directly in paths
-
----
-
-Built with ❤️ using scalable Java patterns: Thread Pools, Connection Pooling, Scheduled Executors, Round-Robin Distribution, Chunk Stitching, and Concurrent Data Structures.
+- Database migration done (event_logs exists)
+- Both machines pulled latest code
+- compile.bat succeeded on both machines
+- Machine A running Tomcat + Master + DataNode2 + DataNode3
+- Machine B running DataNode1
+- Register/Login/Logout works
+- Upload/Files/Download/Delete works
+- Replication verified in chunk_locations
+- Failure detection verified in nodes table
+- Auto-recovery verified via event_logs and replica_count

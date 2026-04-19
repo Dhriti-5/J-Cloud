@@ -45,6 +45,7 @@ public class AdminServlet extends HttpServlet {
 
         HttpSession session = request.getSession();
         User user = (User) session.getAttribute("user");
+        boolean isAdmin = Boolean.TRUE.equals(session.getAttribute("isAdmin"));
 
         // Check if user is authenticated
         if (user == null) {
@@ -52,8 +53,11 @@ public class AdminServlet extends HttpServlet {
             return;
         }
 
-        // TODO: Add admin role check in future
-        // For now, allow all authenticated users to view admin dashboard
+        // Only fixed admin credentials are allowed to view admin dashboard
+        if (!isAdmin) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Access denied: admin credentials required");
+            return;
+        }
 
         try {
             // **TASK 1: Fetch Node Status (Day 11)**

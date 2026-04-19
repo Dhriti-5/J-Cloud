@@ -2,19 +2,29 @@
 <%@ page import="shared.User, shared.NodeInfo, java.util.List, java.util.Map" %>
 <%
     User user = (User) session.getAttribute("user");
+    boolean isAdmin = Boolean.TRUE.equals(session.getAttribute("isAdmin"));
     if (user == null) {
         response.sendRedirect("login");
         return;
     }
+    if (!isAdmin) {
+        response.sendError(HttpServletResponse.SC_FORBIDDEN, "Access denied: admin credentials required");
+        return;
+    }
 
-    // Day 11: Node Status
+    // Always route through AdminServlet so live metrics and event feed are populated.
+    if (request.getAttribute("recentEvents") == null || request.getAttribute("allNodes") == null) {
+        response.sendRedirect(request.getContextPath() + "/admin");
+        return;
+    }
+
     List<NodeInfo> allNodes = (List<NodeInfo>) request.getAttribute("allNodes");
     Integer totalNodes = (Integer) request.getAttribute("totalNodes");
     Integer aliveNodes = (Integer) request.getAttribute("aliveNodes");
     Integer deadNodes = (Integer) request.getAttribute("deadNodes");
     Long totalCapacity = (Long) request.getAttribute("totalCapacity");
 
-    // Day 12: Event Logs & System Health
+    // Event Logs & System Health
     List<Map<String, String>> recentEvents = (List<Map<String, String>>) request.getAttribute("recentEvents");
     Integer healthyChunks = (Integer) request.getAttribute("healthyChunks");
     Integer underReplicatedChunks = (Integer) request.getAttribute("underReplicatedChunks");
@@ -279,10 +289,10 @@
     <div class="navbar">
         <h1>🏢 J-Cloud Admin</h1>
         <div class="nav-links">
-            <a href="dashboard">📊 Dashboard</a>
-            <a href="admin">📡 Node Monitoring</a>
+            <a href="<%= request.getContextPath() %>/dashboard.jsp">📊 Dashboard</a>
+            <a href="<%= request.getContextPath() %>/admin">📡 Node Monitoring</a>
             <span>👤 <%= user.getUsername() %></span>
-            <a href="logout" class="logout-btn">Logout</a>
+            <a href="<%= request.getContextPath() %>/logout" class="logout-btn">Logout</a>
         </div>
     </div>
 
@@ -296,7 +306,7 @@
         <!-- Alerts Section -->
         <% if (deadNodes > 0) { %>
             <div class="alert danger">
-                ⚠️ Critical: <strong><%= deadNodes %> node(s)</strong> are currently DOWN. Automatic recovery in progress (Day 12).
+                ⚠️ Critical: <strong><%= deadNodes %> node(s)</strong> are currently DOWN. Automatic recovery in progress.
             </div>
         <% } else if (totalNodes > 0) { %>
             <div class="alert warning">

@@ -2,6 +2,7 @@ package servlet;
 
 import dao.UserDAO;
 import shared.User;
+import utils.Config;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -20,11 +21,26 @@ import java.security.NoSuchAlgorithmException;
 @WebServlet("/login")
 public class LoginServlet extends HttpServlet {
 
+    private static final String ADMIN_USERNAME_KEY = "JCLOUD_ADMIN_USERNAME";
+    private static final String ADMIN_PASSWORD_KEY = "JCLOUD_ADMIN_PASSWORD";
+    private static final String ADMIN_EMAIL_KEY = "JCLOUD_ADMIN_EMAIL";
+
+    private String adminUsername;
+    private String adminPassword;
+    private String adminEmail;
+
     private UserDAO userDAO;
 
     @Override
     public void init() throws ServletException {
         userDAO = new UserDAO();
+        try {
+            adminUsername = Config.getRequiredEnv(ADMIN_USERNAME_KEY);
+            adminPassword = Config.getRequiredEnv(ADMIN_PASSWORD_KEY);
+            adminEmail = Config.getRequiredEnv(ADMIN_EMAIL_KEY);
+        } catch (IllegalStateException ex) {
+            throw new ServletException("Missing admin login configuration in environment/.env", ex);
+        }
     }
 
     @Override
@@ -57,6 +73,26 @@ public class LoginServlet extends HttpServlet {
             return;
         }
 
+        // Fixed admin login (independent from database users)
+        if (adminUsername.equals(username) && adminPassword.equals(password)) {
+            User adminUser = new User();
+            adminUser.setUserId(-1);
+            adminUser.setUsername(adminUsername);
+            adminUser.setEmail(adminEmail);
+
+            HttpSession session = request.getSession(true);
+            session.setAttribute("user", adminUser);
+            session.setAttribute("username", adminUser.getUsername());
+            session.setAttribute("userId", adminUser.getUserId());
+            session.setAttribute("isAdmin", true);
+            session.setAttribute("userEmail", adminEmail);
+            session.setMaxInactiveInterval(30 * 60);
+
+            System.out.println("✓ Admin logged in: " + adminUsername);
+            response.sendRedirect("admin");
+            return;
+        }
+
         // Hash password for comparison
         String hashedPassword = hashPassword(password);
 
@@ -69,6 +105,8 @@ public class LoginServlet extends HttpServlet {
             session.setAttribute("user", user);
             session.setAttribute("username", user.getUsername());
             session.setAttribute("userId", user.getUserId());
+            session.setAttribute("isAdmin", false);
+            session.setAttribute("userEmail", user.getEmail());
             
             // Session timeout: 30 minutes
             session.setMaxInactiveInterval(30 * 60);
