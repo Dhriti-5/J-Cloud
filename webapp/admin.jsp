@@ -289,8 +289,6 @@
     <div class="navbar">
         <h1>🏢 J-Cloud Admin</h1>
         <div class="nav-links">
-            <a href="<%= request.getContextPath() %>/dashboard.jsp">📊 Dashboard</a>
-            <a href="<%= request.getContextPath() %>/admin">📡 Node Monitoring</a>
             <span>👤 <%= user.getUsername() %></span>
             <a href="<%= request.getContextPath() %>/logout" class="logout-btn">Logout</a>
         </div>
