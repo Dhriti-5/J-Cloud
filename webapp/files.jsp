@@ -1,12 +1,15 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
-<%@ page import="shared.User, dao.FileDAO, dao.ChunkDAO, java.util.List, shared.FileMetadata, shared.Chunk" %>
+<%@ page import="shared.User, dao.FileDAO, dao.ChunkDAO, dao.NodeDAO, java.util.List, shared.FileMetadata, shared.Chunk, shared.NodeInfo, utils.NodeHealthUtil" %>
 <%
     User user = (User) session.getAttribute("user");
     if (user == null) { response.sendRedirect("login"); return; }
 
     FileDAO  fileDAO  = new FileDAO();
     ChunkDAO chunkDAO = new ChunkDAO();
+    NodeDAO  nodeDAO  = new NodeDAO();
     List<FileMetadata> myFiles = fileDAO.listFilesByOwner(user.getUserId());
+    List<NodeInfo> reachableNodes = NodeHealthUtil.getReachableNodesSortedByCapacity(nodeDAO.getAllNodes());
+    boolean nodesAvailable = !reachableNodes.isEmpty();
 
     long totalBytes = 0;
     if (myFiles != null) for (FileMetadata f : myFiles) totalBytes += f.getFileSize();
@@ -24,6 +27,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Files - J-Cloud</title>
+    <style src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; background:#f5f7fa; }
@@ -56,6 +60,11 @@
         }
         .summary-bar strong { color:#667eea; }
 
+        .node-alert {
+            background:#ffe7e7; border:1px solid #f3a6a6; border-radius:8px;
+            padding:14px 18px; margin-bottom:20px; color:#c00; font-size:14px;
+        }
+
         .card { background:white; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,.08); overflow:hidden; }
         table { width:100%; border-collapse:collapse; }
         thead { background:#f4f5ff; }
@@ -81,6 +90,22 @@
             cursor:pointer; transition:background .15s; white-space:nowrap;
         }
         .preview-btn:hover { background:#e4e9ff; }
+        .preview-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: #f0f4ff;
+            color: #667eea;
+            border: 1px solid #d4dcf7;
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
         .download-btn {
             display:inline-flex; align-items:center; gap:5px;
             background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
@@ -96,13 +121,38 @@
             cursor:pointer; transition:background .2s;
         }
         .delete-btn:hover { background:#ffdcdc; }
+        
+        /* Disabled button styles */
+        .download-btn.disabled, .delete-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .download-btn.disabled {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .delete-btn.disabled {
+            background: #ffe8e8;
+            color: #b03030;
+            border: 1px solid #f3b4b4;
+        }
+        
         .inline-form { display:inline; margin:0; }
 
         .empty-state { text-align:center; padding:64px 20px; color:#999; }
         .empty-state .ei { font-size:56px; margin-bottom:16px; }
         .empty-state p { font-size:15px; margin-bottom:22px; }
 
-        /* ── Preview Drawer ── */
+        /* -- Preview Drawer -- */
         .drawer-overlay {
             display:none; position:fixed; inset:0;
             background:rgba(0,0,0,.45); z-index:900;
@@ -217,6 +267,13 @@
     </div>
     <% } %>
 
+    <% if (!nodesAvailable) { %>
+    <div class="node-alert">
+        <strong>&#9888; System Offline:</strong> All data nodes are currently offline. 
+        Download, delete, and preview are disabled until at least one data node comes online.
+    </div>
+    <% } %>
+
     <div class="card">
     <% if (myFiles == null || myFiles.isEmpty()) { %>
         <div class="empty-state">
@@ -275,11 +332,16 @@
                 <td>
                     <div class="action-group">
                         <% if (!"none".equals(previewType)) { %>
-                        <button class="preview-btn"
-                            onclick="openPreview(<%= file.getFileId() %>,'<%= file.getFileName().replace("'","\\'").replace("\"","&quot;") %>','<%= sizeStr %>','<%= previewType %>','<%= icon %>')">
-                            &#128065;&#65039; Preview
-                        </button>
+                            <% if (nodesAvailable) { %>
+                            <button class="preview-btn"
+                                onclick="openPreview(<%= file.getFileId() %>,'<%= file.getFileName().replace("'","\\'").replace("\"","&quot;") %>','<%= sizeStr %>','<%= previewType %>','<%= icon %>')">
+                                &#128065;&#65039; Preview
+                            </button>
+                            <% } else { %>
+                            <span class="preview-btn disabled" title="Preview disabled: no data nodes online">&#128065;&#65039; Preview</span>
+                            <% } %>
                         <% } %>
+                        <% if (nodesAvailable) { %>
                         <a href="<%= ctx %>/download?file_id=<%= file.getFileId() %>" class="download-btn">
                             &#128229; Download
                         </a>
@@ -288,6 +350,10 @@
                             <input type="hidden" name="file_id" value="<%= file.getFileId() %>">
                             <button type="submit" class="delete-btn">&#128465;&#65039;</button>
                         </form>
+                        <% } else { %>
+                        <span class="download-btn disabled" title="Download disabled: no data nodes online">&#128229; Download</span>
+                        <span class="delete-btn disabled" title="Delete disabled: no data nodes online">&#128465;&#65039;</span>
+                        <% } %>
                     </div>
                 </td>
             </tr>
@@ -298,7 +364,7 @@
     </div>
 </div>
 
-<!-- ── Preview Drawer ── -->
+<!-- -- Preview Drawer -- -->
 <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
 
 <div class="drawer" id="drawer">
@@ -313,7 +379,7 @@
         <a id="drawerNewTab"   href="#" target="_blank" class="drawer-new-tab-btn">&#128279; Open in new tab</a>
     </div>
     <div class="drawer-body" id="drawerBody">
-        <div class="preview-loading"><div class="spinner"></div><span>Loading preview…</span></div>
+        <div class="preview-loading"><div class="spinner"></div><span>Loading preview�</span></div>
     </div>
 </div>
 
@@ -369,7 +435,7 @@ function openPreview(fileId, fileName, fileSize, previewType, icon) {
                 const lines = text.split('\n');
                 const truncated = lines.length > 500;
                 pre.textContent = truncated
-                    ? lines.slice(0, 500).join('\n') + '\n\n… (showing first 500 lines — download to see full file)'
+                    ? lines.slice(0, 500).join('\n') + '\n\n� (showing first 500 lines � download to see full file)'
                     : text;
                 document.getElementById('drawerBody').innerHTML = '';
                 document.getElementById('drawerBody').appendChild(pre);

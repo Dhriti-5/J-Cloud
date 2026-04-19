@@ -38,6 +38,15 @@ public class PreviewServlet extends HttpServlet {
     }
 
     @Override
+    protected void doOptions(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        response.setStatus(HttpServletResponse.SC_OK);
+    }
+
+    @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
@@ -83,6 +92,9 @@ public class PreviewServlet extends HttpServlet {
         response.setContentType(mimeType);
         response.setContentLengthLong(file.getFileSize());
         response.setHeader("Cache-Control", "private, max-age=300");
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
         String encodedName = URLEncoder.encode(file.getFileName(), StandardCharsets.UTF_8.name())
                 .replace("+", "%20");

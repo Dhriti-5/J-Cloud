@@ -502,18 +502,6 @@
         </div>
 
         <!-- Instructions -->
-        <div style="margin-top: 40px; padding: 20px; background: #f9f9f9; border-radius: 8px;">
-            <h4 style="color: #333; margin-bottom: 10px;">💡 How Day 11 & 12 Work Together</h4>
-            <ul style="color: #666; line-height: 1.8; margin-left: 20px;">
-                <li><strong>Day 11 - Failure Detection:</strong> HeartbeatMonitor detects dead nodes (>15s timeout)</li>
-                <li><strong>Day 12 - Metadata Purge:</strong> Deletes chunk_locations for dead node → triggers healing</li>
-                <li><strong>Day 10 - Automatic Healing:</strong> ReplicationManager finds under-replicated chunks & copies them</li>
-                <li><strong>Event Logging:</strong> Every failure & recovery logged to event_logs table (visible above)</li>
-                <li><strong>Green 🟢:</strong> Node is healthy and ACTIVE</li>
-                <li><strong>Red 🔴:</strong> Node is DEAD (will auto-recover below)</li>
-                <li><strong>Recovery Progress:</strong> Shows healing percentage (chunks with RF ≥ 2)</li>
-            </ul>
-        </div>
     </div>
 
     <script>

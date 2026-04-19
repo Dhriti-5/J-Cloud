@@ -1,7 +1,8 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
-<%@ page import="shared.User, dao.FileDAO, dao.NodeDAO, java.util.List, shared.FileMetadata, shared.NodeInfo" %>
+<%@ page import="shared.User, dao.FileDAO, dao.NodeDAO, java.util.List, shared.FileMetadata, shared.NodeInfo, utils.NodeHealthUtil" %>
 <%
     User user = (User) session.getAttribute("user");
+    boolean isAdmin = Boolean.TRUE.equals(session.getAttribute("isAdmin"));
     if (user == null) {
         response.sendRedirect("login");
         return;
@@ -10,10 +11,11 @@
     FileDAO fileDAO    = new FileDAO();
     NodeDAO nodeDAO    = new NodeDAO();
     List<FileMetadata> myFiles     = fileDAO.listFilesByOwner(user.getUserId());
-    List<NodeInfo>     activeNodes = nodeDAO.getAllActiveNodes();
+    List<NodeInfo>     activeNodes = NodeHealthUtil.getReachableNodesSortedByCapacity(nodeDAO.getAllNodes());
 
     int  fileCount = (myFiles     != null) ? myFiles.size()     : 0;
     int  nodeCount = (activeNodes != null) ? activeNodes.size() : 0;
+    boolean nodesAvailable = nodeCount > 0;
 
     long totalBytes = 0;
     if (myFiles != null) {
@@ -235,13 +237,22 @@
         <div class="welcome-card">
             <h2>Welcome back, <%= user.getUsername() %>!</h2>
             <p>Distributed File Storage System &mdash; your files are split across multiple data nodes.</p>
-            <p>
-                <span class="status-dot <%= nodeCount > 0 ? "dot-green" : "dot-red" %>"></span>
-                System Status:
-                <%= nodeCount > 0
-                    ? nodeCount + " active data node(s) online"
-                    : "No data nodes online — start run-datanode1.bat" %>
-            </p>
+            <% if (isAdmin) { %>
+                <p>
+                    <span class="status-dot <%= nodesAvailable ? "dot-green" : "dot-red" %>"></span>
+                    System Status:
+                    <%= nodesAvailable
+                        ? nodeCount + " active data node(s) online"
+                        : "No data nodes online — start run-datanode1.bat" %>
+                </p>
+            <% } else { %>
+                <p>
+                    <span class="status-dot <%= nodesAvailable ? "dot-green" : "dot-red" %>"></span>
+                    <%= nodesAvailable
+                        ? "Storage services are available."
+                        : "Storage services are currently offline. You can view files, but upload/download/delete is unavailable." %>
+                </p>
+            <% } %>
         </div>
 
         <!-- Stats Grid -->
@@ -256,12 +267,21 @@
                 <div class="number"><%= storageUsed %></div>
                 <div class="label">Storage Used</div>
             </div>
-            <div class="stat-card">
-                <div class="icon">&#128421;&#65039;</div>
-                <div class="number"><%= nodeCount %></div>
-                <div class="label">Active Nodes</div>
-            </div>
-            <a href="<%= request.getContextPath() %>/upload" class="stat-card">
+            <% if (isAdmin) { %>
+                <div class="stat-card">
+                    <div class="icon">&#128421;&#65039;</div>
+                    <div class="number"><%= nodeCount %></div>
+                    <div class="label">Active Nodes</div>
+                </div>
+            <% } else { %>
+                <div class="stat-card">
+                    <div class="icon"><%= nodesAvailable ? "&#9989;" : "&#9888;&#65039;" %></div>
+                    <div class="number"><%= nodesAvailable ? "Online" : "Offline" %></div>
+                    <div class="label">Storage Service</div>
+                </div>
+            <% } %>
+            <a href="<%= request.getContextPath() %>/upload" class="stat-card"
+               <%= !nodesAvailable ? "style='opacity:0.5; pointer-events:none; cursor:not-allowed;' title='Upload disabled: server offline'" : "" %>>
                 <div class="icon">&#128228;</div>
                 <div class="number">+</div>
                 <div class="label">Upload New File</div>
@@ -272,7 +292,8 @@
         <div class="actions-card">
             <h3>Quick Actions</h3>
             <div class="action-buttons">
-                <a href="<%= request.getContextPath() %>/upload" class="action-btn">
+                <a href="<%= request.getContextPath() %>/upload" class="action-btn"
+                   <%= !nodesAvailable ? "style='opacity:0.5; pointer-events:none; cursor:not-allowed;' title='Upload disabled: server offline'" : "" %>>
                     &#128228; Upload File
                 </a>
                 <a href="<%= request.getContextPath() %>/files.jsp" class="action-btn">
@@ -311,8 +332,9 @@
                         <td><span class="fname">&#128196; <%= f.getFileName() %></span></td>
                         <td><span class="size-pill"><%= szStr %></span></td>
                         <td>
-                            <a href="<%= request.getContextPath() %>/download?file_id=<%= f.getFileId() %>"
-                               class="dl-btn">&#128229; Download</a>
+                                     <a href="<%= request.getContextPath() %>/download?file_id=<%= f.getFileId() %>"
+                                         class="dl-btn"
+                                         <%= !nodesAvailable ? "style='opacity:0.5; pointer-events:none; cursor:not-allowed;' title='Download disabled: no data nodes online'" : "" %>>&#128229; Download</a>
                         </td>
                     </tr>
                 <%
@@ -329,8 +351,8 @@
             <% } %>
         </div>
 
-        <!-- Active Data Nodes -->
-        <% if (activeNodes != null && !activeNodes.isEmpty()) { %>
+        <!-- Active Data Nodes (Only for Admin) -->
+        <% if (isAdmin && activeNodes != null && !activeNodes.isEmpty()) { %>
         <div class="nodes-card">
             <h3>&#128421;&#65039; Active Data Nodes</h3>
             <% for (NodeInfo n : activeNodes) { %>
