@@ -90,6 +90,22 @@
             cursor:pointer; transition:background .15s; white-space:nowrap;
         }
         .preview-btn:hover { background:#e4e9ff; }
+        .preview-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: #f0f4ff;
+            color: #667eea;
+            border: 1px solid #d4dcf7;
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
         .download-btn {
             display:inline-flex; align-items:center; gap:5px;
             background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
@@ -254,7 +270,7 @@
     <% if (!nodesAvailable) { %>
     <div class="node-alert">
         <strong>&#9888; System Offline:</strong> All data nodes are currently offline. 
-        You can preview files but cannot download or delete until at least one data node comes online.
+        Download, delete, and preview are disabled until at least one data node comes online.
     </div>
     <% } %>
 
@@ -316,10 +332,14 @@
                 <td>
                     <div class="action-group">
                         <% if (!"none".equals(previewType)) { %>
-                        <button class="preview-btn"
-                            onclick="openPreview(<%= file.getFileId() %>,'<%= file.getFileName().replace("'","\\'").replace("\"","&quot;") %>','<%= sizeStr %>','<%= previewType %>','<%= icon %>')">
-                            &#128065;&#65039; Preview
-                        </button>
+                            <% if (nodesAvailable) { %>
+                            <button class="preview-btn"
+                                onclick="openPreview(<%= file.getFileId() %>,'<%= file.getFileName().replace("'","\\'").replace("\"","&quot;") %>','<%= sizeStr %>','<%= previewType %>','<%= icon %>')">
+                                &#128065;&#65039; Preview
+                            </button>
+                            <% } else { %>
+                            <span class="preview-btn disabled" title="Preview disabled: no data nodes online">&#128065;&#65039; Preview</span>
+                            <% } %>
                         <% } %>
                         <% if (nodesAvailable) { %>
                         <a href="<%= ctx %>/download?file_id=<%= file.getFileId() %>" class="download-btn">
