@@ -1,5 +1,5 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
-<%@ page import="shared.User, dao.FileDAO, dao.ChunkDAO, dao.NodeDAO, java.util.List, shared.FileMetadata, shared.Chunk, shared.NodeInfo" %>
+<%@ page import="shared.User, dao.FileDAO, dao.ChunkDAO, dao.NodeDAO, java.util.List, shared.FileMetadata, shared.Chunk, shared.NodeInfo, utils.NodeHealthUtil" %>
 <%
     User user = (User) session.getAttribute("user");
     if (user == null) {
@@ -11,8 +11,8 @@
     ChunkDAO chunkDAO = new ChunkDAO();
     NodeDAO  nodeDAO  = new NodeDAO();
     List<FileMetadata> myFiles = fileDAO.listFilesByOwner(user.getUserId());
-    List<NodeInfo> activeNodes = nodeDAO.getAllActiveNodes();
-    boolean nodesAvailable = activeNodes != null && !activeNodes.isEmpty();
+    List<NodeInfo> reachableNodes = NodeHealthUtil.getReachableNodesSortedByCapacity(nodeDAO.getAllNodes());
+    boolean nodesAvailable = !reachableNodes.isEmpty();
 
     // Summary totals
     long totalBytes = 0;
@@ -227,7 +227,8 @@
         <h1>&#9729;&#65039; J-Cloud</h1>
         <div class="navbar-links">
             <a href="<%= request.getContextPath() %>/dashboard.jsp">Dashboard</a>
-            <a href="<%= request.getContextPath() %>/upload">Upload</a>
+            <a href="<%= request.getContextPath() %>/upload"
+               <%= !nodesAvailable ? "style='opacity:0.5; pointer-events:none; cursor:not-allowed;' title='Upload disabled: server offline'" : "" %>>Upload</a>
             <a href="<%= request.getContextPath() %>/logout">Logout</a>
         </div>
     </div>
@@ -237,7 +238,8 @@
         <!-- Page header -->
         <div class="page-header">
             <h2>&#128203; My Files</h2>
-            <a href="<%= request.getContextPath() %>/upload" class="btn-new">&#128228; Upload New</a>
+            <a href="<%= request.getContextPath() %>/upload" class="btn-new"
+               <%= !nodesAvailable ? "style='opacity:0.5; pointer-events:none; cursor:not-allowed;' title='Upload disabled: server offline'" : "" %>>&#128228; Upload New</a>
         </div>
 
         <!-- Summary bar — only shown when files exist -->
@@ -264,7 +266,8 @@
             <div class="empty-state">
                 <div class="empty-icon">&#128193;</div>
                 <p>You haven't uploaded any files yet.</p>
-                <a href="<%= request.getContextPath() %>/upload" class="download-btn">
+                <a href="<%= request.getContextPath() %>/upload" class="download-btn"
+                   <%= !nodesAvailable ? "style='opacity:0.5; pointer-events:none; cursor:not-allowed;' title='Upload disabled: server offline'" : "" %>>
                     &#128228; Upload your first file
                 </a>
             </div>

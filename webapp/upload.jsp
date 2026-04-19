@@ -1,5 +1,5 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
-<%@ page import="shared.User, dao.NodeDAO, shared.NodeInfo, java.util.List" %>
+<%@ page import="shared.User, dao.NodeDAO, shared.NodeInfo, java.util.List, utils.NodeHealthUtil" %>
 <%
     User user = (User) session.getAttribute("user");
     if (user == null) {
@@ -8,8 +8,8 @@
     }
 
     NodeDAO nodeDAO = new NodeDAO();
-    List<NodeInfo> activeNodes = nodeDAO.getAllActiveNodes();
-    boolean nodesAvailable = activeNodes != null && !activeNodes.isEmpty();
+    List<NodeInfo> reachableNodes = NodeHealthUtil.getReachableNodesSortedByCapacity(nodeDAO.getAllNodes());
+    boolean nodesAvailable = !reachableNodes.isEmpty();
 %>
 <!DOCTYPE html>
 <html lang="en">

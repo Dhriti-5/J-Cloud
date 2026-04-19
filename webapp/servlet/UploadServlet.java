@@ -10,6 +10,7 @@ import shared.DataNodeClient;
 import shared.FileMetadata;
 import shared.NodeInfo;
 import shared.User;
+import utils.NodeHealthUtil;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.MultipartConfig;
@@ -125,12 +126,12 @@ public class UploadServlet extends HttpServlet {
             return;
         }
 
-        // ── Retrieve active nodes once for all files ─────────────────────────
+        // ── Retrieve currently reachable nodes once for all files ─────────────
         nodeDAO = new NodeDAO();
-        List<NodeInfo> activeNodes = nodeDAO.getActiveNodesSortedByCapacity();
+        List<NodeInfo> activeNodes = NodeHealthUtil.getReachableNodesSortedByCapacity(nodeDAO.getAllNodes());
         if (activeNodes.isEmpty()) {
             request.setAttribute("error",
-                "No active data nodes available. Please start at least one node.");
+                "Server is offline: all data nodes are inactive. Upload is disabled until at least one node is online.");
             request.getRequestDispatcher("/upload.jsp").forward(request, response);
             return;
         }

@@ -1,5 +1,5 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
-<%@ page import="shared.User, dao.FileDAO, dao.NodeDAO, java.util.List, shared.FileMetadata, shared.NodeInfo" %>
+<%@ page import="shared.User, dao.FileDAO, dao.NodeDAO, java.util.List, shared.FileMetadata, shared.NodeInfo, utils.NodeHealthUtil" %>
 <%
     User user = (User) session.getAttribute("user");
     boolean isAdmin = Boolean.TRUE.equals(session.getAttribute("isAdmin"));
@@ -11,7 +11,7 @@
     FileDAO fileDAO    = new FileDAO();
     NodeDAO nodeDAO    = new NodeDAO();
     List<FileMetadata> myFiles     = fileDAO.listFilesByOwner(user.getUserId());
-    List<NodeInfo>     activeNodes = nodeDAO.getAllActiveNodes();
+    List<NodeInfo>     activeNodes = NodeHealthUtil.getReachableNodesSortedByCapacity(nodeDAO.getAllNodes());
 
     int  fileCount = (myFiles     != null) ? myFiles.size()     : 0;
     int  nodeCount = (activeNodes != null) ? activeNodes.size() : 0;
@@ -280,7 +280,8 @@
                     <div class="label">Storage Service</div>
                 </div>
             <% } %>
-            <a href="<%= request.getContextPath() %>/upload" class="stat-card">
+            <a href="<%= request.getContextPath() %>/upload" class="stat-card"
+               <%= !nodesAvailable ? "style='opacity:0.5; pointer-events:none; cursor:not-allowed;' title='Upload disabled: server offline'" : "" %>>
                 <div class="icon">&#128228;</div>
                 <div class="number">+</div>
                 <div class="label">Upload New File</div>
@@ -291,7 +292,8 @@
         <div class="actions-card">
             <h3>Quick Actions</h3>
             <div class="action-buttons">
-                <a href="<%= request.getContextPath() %>/upload" class="action-btn">
+                <a href="<%= request.getContextPath() %>/upload" class="action-btn"
+                   <%= !nodesAvailable ? "style='opacity:0.5; pointer-events:none; cursor:not-allowed;' title='Upload disabled: server offline'" : "" %>>
                     &#128228; Upload File
                 </a>
                 <a href="<%= request.getContextPath() %>/files.jsp" class="action-btn">

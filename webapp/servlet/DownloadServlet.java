@@ -10,6 +10,7 @@ import shared.DataNodeClient;
 import shared.FileMetadata;
 import shared.NodeInfo;
 import shared.User;
+import utils.NodeHealthUtil;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -93,11 +94,11 @@ public class DownloadServlet extends HttpServlet {
             return;
         }
 
-        // Check if at least one node is active
-        List<NodeInfo> activeNodes = nodeDAO.getAllActiveNodes();
-        if (activeNodes == null || activeNodes.isEmpty()) {
+        // Check if at least one node is reachable right now.
+        List<NodeInfo> allNodes = nodeDAO.getAllNodes();
+        if (!NodeHealthUtil.isAnyNodeReachable(allNodes)) {
             request.setAttribute("error",
-                "Cannot download file: All data nodes are currently offline. Please try again later.");
+                "Server is offline: all data nodes are inactive. Download is disabled until at least one node is online.");
             request.getRequestDispatcher("/files.jsp").forward(request, response);
             return;
         }
@@ -142,8 +143,8 @@ public class DownloadServlet extends HttpServlet {
             byte[] chunkData = null;
             for (ChunkLocation location : locations) {
                 NodeInfo node = nodeDAO.getNodeById(location.getNodeId());
-                if (node == null || !"ACTIVE".equalsIgnoreCase(node.getStatus())) {
-                    System.out.println("⚠ Node " + location.getNodeId() + " is not ACTIVE, trying next...");
+                if (node == null || !NodeHealthUtil.isNodeReachable(node)) {
+                    System.out.println("⚠ Node " + location.getNodeId() + " is offline, trying next...");
                     continue;
                 }
 
