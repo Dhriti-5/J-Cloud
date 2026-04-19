@@ -1,5 +1,5 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
-<%@ page import="shared.User, dao.FileDAO, dao.ChunkDAO, java.util.List, shared.FileMetadata, shared.Chunk" %>
+<%@ page import="shared.User, dao.FileDAO, dao.ChunkDAO, dao.NodeDAO, java.util.List, shared.FileMetadata, shared.Chunk, shared.NodeInfo" %>
 <%
     User user = (User) session.getAttribute("user");
     if (user == null) {
@@ -9,7 +9,10 @@
 
     FileDAO  fileDAO  = new FileDAO();
     ChunkDAO chunkDAO = new ChunkDAO();
+    NodeDAO  nodeDAO  = new NodeDAO();
     List<FileMetadata> myFiles = fileDAO.listFilesByOwner(user.getUserId());
+    List<NodeInfo> activeNodes = nodeDAO.getAllActiveNodes();
+    boolean nodesAvailable = activeNodes != null && !activeNodes.isEmpty();
 
     // Summary totals
     long totalBytes = 0;
@@ -246,6 +249,14 @@
         </div>
         <% } %>
 
+        <!-- Node Status Alert -->
+        <% if (!nodesAvailable) { %>
+        <div style="background: #ffe7e7; border: 1px solid #f3a6a6; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; color: #c00;">
+            <strong>⚠️ System Offline:</strong> All data nodes are currently offline. 
+            You can view your files but cannot download or delete them until at least one data node comes online.
+        </div>
+        <% } %>
+
         <!-- File table or empty state -->
         <div class="card">
             <% if (myFiles == null || myFiles.isEmpty()) { %>
@@ -317,15 +328,16 @@
                     <td>
                         <div class="action-group">
                             <a href="<%= request.getContextPath() %>/download?file_id=<%= file.getFileId() %>"
-                               class="download-btn">
+                               class="download-btn"
+                               <%= !nodesAvailable ? "style='opacity:0.5; pointer-events:none; cursor:not-allowed;' title='Download disabled: no data nodes online'" : "" %>>
                                 &#128229; Download
                             </a>
                             <form method="post"
                                   action="<%= request.getContextPath() %>/delete"
                                   class="inline-form"
-                                  onsubmit="return confirm('Delete this file? The file will disappear immediately while chunk cleanup runs in background.');">
+                                  onsubmit="<%= !nodesAvailable ? "return false;" : "return confirm('Delete this file? The file will disappear immediately while chunk cleanup runs in background.');" %>">
                                 <input type="hidden" name="file_id" value="<%= file.getFileId() %>">
-                                <button type="submit" class="delete-btn">&#128465;&#65039; Delete</button>
+                                <button type="submit" class="delete-btn" <%= !nodesAvailable ? "disabled style='opacity:0.5; cursor:not-allowed;' title='Delete disabled: no data nodes online'" : "" %>>&#128465;&#65039; Delete</button>
                             </form>
                         </div>
                     </td>

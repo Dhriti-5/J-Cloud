@@ -93,6 +93,15 @@ public class DownloadServlet extends HttpServlet {
             return;
         }
 
+        // Check if at least one node is active
+        List<NodeInfo> activeNodes = nodeDAO.getAllActiveNodes();
+        if (activeNodes == null || activeNodes.isEmpty()) {
+            request.setAttribute("error",
+                "Cannot download file: All data nodes are currently offline. Please try again later.");
+            request.getRequestDispatcher("/files.jsp").forward(request, response);
+            return;
+        }
+
         // ── 4. Fetch all chunks ordered by chunk_index ───────────────────────
         List<Chunk> chunks = chunkDAO.getChunksByFileId(fileId);
         if (chunks == null || chunks.isEmpty()) {

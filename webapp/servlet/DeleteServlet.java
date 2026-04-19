@@ -1,9 +1,13 @@
 package servlet;
 
 import dao.FileDAO;
+import dao.NodeDAO;
 import shared.FileMetadata;
+import shared.NodeInfo;
 import shared.User;
 import utils.Config;
+
+import java.util.List;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -33,10 +37,12 @@ public class DeleteServlet extends HttpServlet {
     private static final int MASTER_PORT = Config.MASTER_PORT;
 
     private FileDAO fileDAO;
+    private NodeDAO nodeDAO;
 
     @Override
     public void init() throws ServletException {
         fileDAO = new FileDAO();
+        nodeDAO = new NodeDAO();
     }
 
     @Override
@@ -68,6 +74,15 @@ public class DeleteServlet extends HttpServlet {
         FileMetadata file = fileDAO.getFileById(fileId);
         if (file == null || file.getOwnerId() != user.getUserId()) {
             response.sendRedirect(request.getContextPath() + "/files.jsp");
+            return;
+        }
+
+        // Check if at least one node is active
+        List<NodeInfo> activeNodes = nodeDAO.getAllActiveNodes();
+        if (activeNodes == null || activeNodes.isEmpty()) {
+            request.setAttribute("error",
+                "Cannot delete file: All data nodes are currently offline. Please try again later.");
+            request.getRequestDispatcher("/files.jsp").forward(request, response);
             return;
         }
 

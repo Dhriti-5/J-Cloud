@@ -1,11 +1,15 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
-<%@ page import="shared.User" %>
+<%@ page import="shared.User, dao.NodeDAO, shared.NodeInfo, java.util.List" %>
 <%
     User user = (User) session.getAttribute("user");
     if (user == null) {
         response.sendRedirect("login");
         return;
     }
+
+    NodeDAO nodeDAO = new NodeDAO();
+    List<NodeInfo> activeNodes = nodeDAO.getAllActiveNodes();
+    boolean nodesAvailable = activeNodes != null && !activeNodes.isEmpty();
 %>
 <!DOCTYPE html>
 <html lang="en">
@@ -261,6 +265,14 @@
                 <div class="message error">&#9888; <%= request.getAttribute("error") %></div>
             <% } %>
 
+            <!-- Node Status Alert -->
+            <% if (!nodesAvailable) { %>
+            <div class="message error" style="background: #ffe7e7; border: 1px solid #f3a6a6; color: #c00;">
+                ⚠️ <strong>System Offline:</strong> All data nodes are currently offline. 
+                You cannot upload files at this time. Please try again when at least one data node comes online.
+            </div>
+            <% } %>
+
             <!-- Limit badges -->
             <div class="limit-row">
                 <span class="limit-badge">&#128194; Max 5 files per upload</span>
@@ -301,7 +313,7 @@
                 </div>
 
                 <!-- Upload button -->
-                <button type="submit" class="btn-upload" id="uploadBtn">
+                <button type="submit" class="btn-upload" id="uploadBtn" <%= !nodesAvailable ? "disabled style='opacity:0.5; cursor:not-allowed;'" : "" %>>
                     &#128228; Upload &amp; Distribute
                 </button>
 
