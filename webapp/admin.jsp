@@ -434,7 +434,7 @@
 
         <!-- Day 12: Event Log Section -->
         <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-top: 40px;">
-            <h3 class="section-title">📋 Live Event Feed (Day 12)</h3>
+            <h3 class="section-title">📋 Live Event Feed</h3>
             <p style="color: #666; font-size: 13px; margin-bottom: 20px;">System recovery and replication events in real-time</p>
             
             <% if (recentEvents != null && !recentEvents.isEmpty()) { %>
