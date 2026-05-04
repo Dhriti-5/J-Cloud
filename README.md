@@ -1,4 +1,4 @@
-# ☁️ J-Cloud - Distributed File Storage System
+<img width="542" height="661" alt="image" src="https://github.com/user-attachments/assets/9717bc51-e6cb-409d-a374-91fa30b9657a" />
 
 J-Cloud is a production-ready, distributed object storage system inspired by HDFS and AWS S3. Built entirely in Java, it demonstrates enterprise-level system design, combining synchronous user-facing operations with autonomous, asynchronous background recovery and replication.
 
